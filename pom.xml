@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <!-- Versão do modelo de configuração do Maven -->
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Identificação do nosso projeto -->
+    <groupId>com.dojogame</groupId>
+    <artifactId>dojo-game</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <!-- Configurações gerais do projeto -->
+    <properties>
+        <!-- Determina que o código será compilado com Java 21 -->
+        <maven.compiler.release>21</maven.compiler.release>
+
+        <javafx.version>21.0.2</javafx.version>
+
+        <!-- Permite acentos e caracteres especiais nos arquivos -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <!-- Bibliotecas utilizadas pelo projeto -->
+    <dependencies>
+
+        <!-- Componentes gráficos do JavaFX: janela, Canvas, Scene etc. -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.dojogame.Main</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

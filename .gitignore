@@ -1,2 +1,4 @@
 .idea/
 *.tiled-session
+target/
+out/
