@@ -14,6 +14,7 @@ import javafx.stage.Stage;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -75,6 +76,12 @@ public class Main extends Application {
         Point2D pontoSaida =
                 carregadorMapa.obterPontoImportante("saida_escadaria");
 
+        // Posição central para onde os guardas irão durante um alerta.
+        Point2D pontoEncontroGuardas =
+                carregadorMapa.obterPontoImportante(
+                        "ponto_encontro_guardas"
+                );
+
         /*
          * Painel que representa o mundo completo do jogo.
          *
@@ -104,6 +111,14 @@ public class Main extends Application {
             guardas.add(guarda);
             mundo.getChildren().add(guarda);
         });
+
+        // Disparos existentes no mundo durante o estado de alerta.
+        List<Projetil> projeteis = new ArrayList<>();
+
+        // Arrays permitem alterar esses valores dentro do AnimationTimer.
+        boolean[] alertaAtivo = {false};
+        boolean[] jogadorDerrotado = {false};
+        int[] vidaJogador = {100};
 
         /*
          * Cria um jogador provisório.
@@ -188,6 +203,34 @@ public class Main extends Application {
         // Adiciona depois do mundo para desenhá-lo por cima do mapa.
         areaVisivel.getChildren().add(avisoSaida);
 
+        Label avisoAlerta = new Label("ALERTA: os guardas viram você!");
+        avisoAlerta.setStyle(
+                "-fx-background-color: rgba(120, 0, 0, 0.90);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 18px;"
+                        + "-fx-font-weight: bold;"
+                        + "-fx-padding: 10px 16px;"
+                        + "-fx-background-radius: 8px;"
+        );
+        avisoAlerta.setLayoutX(20);
+        avisoAlerta.setLayoutY(76);
+        avisoAlerta.setVisible(false);
+        avisoAlerta.setMouseTransparent(true);
+
+        Label indicadorVida = new Label("Vida: 100");
+        indicadorVida.setStyle(
+                "-fx-background-color: rgba(15, 18, 22, 0.90);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 18px;"
+                        + "-fx-padding: 10px 16px;"
+                        + "-fx-background-radius: 8px;"
+        );
+        indicadorVida.setLayoutX(LARGURA_JANELA - 130);
+        indicadorVida.setLayoutY(20);
+        indicadorVida.setMouseTransparent(true);
+
+        areaVisivel.getChildren().addAll(avisoAlerta, indicadorVida);
+
         // Cria uma janela menor que o mapa para permitir o uso da câmera.
         Scene cena = new Scene(areaVisivel, LARGURA_JANELA, ALTURA_JANELA);
 
@@ -248,9 +291,99 @@ public class Main extends Application {
                 // Atualiza o tempo usado no próximo quadro.
                 tempoAnterior = tempoAtual;
 
-                // Atualiza todos os guardas usando as rotas do mapa.
-                for (GuardaPatrulha guarda : guardas) {
-                    guarda.atualizar(tempoDecorrido);
+                if (!alertaAtivo[0]) {
+                    // Enquanto ninguém viu o jogador, cada guarda patrulha.
+                    for (GuardaPatrulha guarda : guardas) {
+                        guarda.atualizarPatrulha(tempoDecorrido);
+                    }
+
+                    boolean jogadorFoiVisto = guardas.stream().anyMatch(
+                            guarda -> guarda.consegueVer(
+                                    jogador,
+                                    carregadorMapa
+                            )
+                    );
+
+                    if (jogadorFoiVisto) {
+                        alertaAtivo[0] = true;
+                        avisoAlerta.setVisible(true);
+
+                        /*
+                         * Distribui os guardas em uma pequena formação ao
+                         * redor do ponto de encontro para não empilhá-los.
+                         */
+                        for (int indice = 0;
+                             indice < guardas.size();
+                             indice++) {
+                            GuardaPatrulha guarda = guardas.get(indice);
+                            double deslocamentoFormacao =
+                                    (indice - (guardas.size() - 1) / 2.0)
+                                            * 32.0;
+                            Point2D destinoDoGuarda = pontoEncontroGuardas.add(
+                                    deslocamentoFormacao,
+                                    0
+                            );
+
+                            List<Point2D> caminho =
+                                    carregadorMapa.encontrarCaminho(
+                                            guarda.obterPosicao(),
+                                            destinoDoGuarda
+                                    );
+                            guarda.entrarEmAlerta(caminho);
+                        }
+                    }
+                } else {
+                    for (GuardaPatrulha guarda : guardas) {
+                        guarda.atualizarAlerta(tempoDecorrido);
+
+                        if (!jogadorDerrotado[0]
+                                && guarda.podeDisparar(
+                                        jogador,
+                                        carregadorMapa,
+                                        tempoDecorrido
+                                )) {
+                            Point2D centroJogador = new Point2D(
+                                    jogador.getX()
+                                            + jogador.getWidth() / 2.0,
+                                    jogador.getY()
+                                            + jogador.getHeight() / 2.0
+                            );
+                            Projetil projetil = new Projetil(
+                                    guarda.obterPosicao(),
+                                    centroJogador
+                            );
+                            projeteis.add(projetil);
+                            mundo.getChildren().add(projetil);
+                        }
+                    }
+                }
+
+                // Atualiza disparos, colisões com paredes e dano no jogador.
+                Iterator<Projetil> iteradorProjeteis = projeteis.iterator();
+
+                while (iteradorProjeteis.hasNext()) {
+                    Projetil projetil = iteradorProjeteis.next();
+                    projetil.atualizar(tempoDecorrido);
+                    boolean atingiuJogador = !jogadorDerrotado[0]
+                            && projetil.atingiu(jogador);
+
+                    if (atingiuJogador) {
+                        vidaJogador[0] = Math.max(0, vidaJogador[0] - 10);
+                        indicadorVida.setText("Vida: " + vidaJogador[0]);
+
+                        if (vidaJogador[0] == 0) {
+                            jogadorDerrotado[0] = true;
+                            avisoAlerta.setText(
+                                    "Você foi derrotado pelos guardas"
+                            );
+                        }
+                    }
+
+                    if (atingiuJogador
+                            || projetil.deveSerRemovido(carregadorMapa)) {
+                        mundo.getChildren().remove(projetil);
+                        iteradorProjeteis.remove();
+                    }
                 }
 
                 // Direção horizontal do jogador.
@@ -277,6 +410,12 @@ public class Main extends Application {
                 // D movimenta o jogador para a direita.
                 if (teclasPressionadas.contains(KeyCode.D)) {
                     direcaoX += 1;
+                }
+
+                // Depois de perder toda a vida, o jogador não se movimenta.
+                if (jogadorDerrotado[0]) {
+                    direcaoX = 0;
+                    direcaoY = 0;
                 }
 
                 /*

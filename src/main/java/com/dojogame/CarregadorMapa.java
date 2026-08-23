@@ -11,6 +11,7 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -288,6 +289,148 @@ public class CarregadorMapa {
     }
 
     /**
+     * Verifica se duas posições conseguem se enxergar sem uma parede no meio.
+     */
+    public boolean possuiLinhaDeVisao(Point2D origem, Point2D destino) {
+        if (blocosComColisao == null) {
+            return false;
+        }
+
+        Point2D deslocamento = destino.subtract(origem);
+        double distancia = deslocamento.magnitude();
+
+        if (distancia == 0) {
+            return true;
+        }
+
+        int quantidadePassos = Math.max(1, (int) Math.ceil(distancia / 8.0));
+
+        for (int passo = 1; passo < quantidadePassos; passo++) {
+            double proporcao = passo / (double) quantidadePassos;
+            double x = origem.getX() + deslocamento.getX() * proporcao;
+            double y = origem.getY() + deslocamento.getY() * proporcao;
+            int coluna = (int) (x / larguraTileMapa);
+            int linha = (int) (y / alturaTileMapa);
+
+            if (posicaoDaGradeBloqueada(linha, coluna)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Encontra um caminho na grade para o guarda não atravessar paredes.
+     */
+    public List<Point2D> encontrarCaminho(
+            Point2D origem,
+            Point2D destino
+    ) {
+        if (blocosComColisao == null) {
+            return List.of(origem);
+        }
+
+        int linhaInicial = (int) (origem.getY() / alturaTileMapa);
+        int colunaInicial = (int) (origem.getX() / larguraTileMapa);
+        int linhaFinal = (int) (destino.getY() / alturaTileMapa);
+        int colunaFinal = (int) (destino.getX() / larguraTileMapa);
+
+        if (posicaoDaGradeBloqueada(linhaInicial, colunaInicial)
+                || posicaoDaGradeBloqueada(linhaFinal, colunaFinal)) {
+            return List.of(origem);
+        }
+
+        int quantidadeLinhas = blocosComColisao.length;
+        int quantidadeColunas = blocosComColisao[0].length;
+        boolean[][] visitado =
+                new boolean[quantidadeLinhas][quantidadeColunas];
+        int[][] linhaAnterior =
+                new int[quantidadeLinhas][quantidadeColunas];
+        int[][] colunaAnterior =
+                new int[quantidadeLinhas][quantidadeColunas];
+
+        for (int linha = 0; linha < quantidadeLinhas; linha++) {
+            java.util.Arrays.fill(linhaAnterior[linha], -1);
+            java.util.Arrays.fill(colunaAnterior[linha], -1);
+        }
+
+        ArrayDeque<int[]> fila = new ArrayDeque<>();
+        fila.add(new int[]{linhaInicial, colunaInicial});
+        visitado[linhaInicial][colunaInicial] = true;
+
+        int[][] direcoes = {
+                {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+        };
+
+        while (!fila.isEmpty()) {
+            int[] atual = fila.removeFirst();
+
+            if (atual[0] == linhaFinal && atual[1] == colunaFinal) {
+                break;
+            }
+
+            for (int[] direcao : direcoes) {
+                int proximaLinha = atual[0] + direcao[0];
+                int proximaColuna = atual[1] + direcao[1];
+
+                if (posicaoDaGradeBloqueada(proximaLinha, proximaColuna)
+                        || visitado[proximaLinha][proximaColuna]) {
+                    continue;
+                }
+
+                visitado[proximaLinha][proximaColuna] = true;
+                linhaAnterior[proximaLinha][proximaColuna] = atual[0];
+                colunaAnterior[proximaLinha][proximaColuna] = atual[1];
+                fila.addLast(new int[]{proximaLinha, proximaColuna});
+            }
+        }
+
+        if (!visitado[linhaFinal][colunaFinal]) {
+            return List.of(origem);
+        }
+
+        List<Point2D> caminhoInvertido = new ArrayList<>();
+        int linhaAtual = linhaFinal;
+        int colunaAtual = colunaFinal;
+
+        while (linhaAtual != linhaInicial || colunaAtual != colunaInicial) {
+            caminhoInvertido.add(centroDoTile(linhaAtual, colunaAtual));
+            int proximaLinha = linhaAnterior[linhaAtual][colunaAtual];
+            int proximaColuna = colunaAnterior[linhaAtual][colunaAtual];
+            linhaAtual = proximaLinha;
+            colunaAtual = proximaColuna;
+        }
+
+        Collections.reverse(caminhoInvertido);
+
+        List<Point2D> caminho = new ArrayList<>();
+        caminho.add(origem);
+        caminho.addAll(caminhoInvertido);
+
+        if (!caminho.get(caminho.size() - 1).equals(destino)) {
+            caminho.add(destino);
+        }
+
+        return caminho;
+    }
+
+    private Point2D centroDoTile(int linha, int coluna) {
+        return new Point2D(
+                coluna * larguraTileMapa + larguraTileMapa / 2.0,
+                linha * alturaTileMapa + alturaTileMapa / 2.0
+        );
+    }
+
+    private boolean posicaoDaGradeBloqueada(int linha, int coluna) {
+        return linha < 0
+                || coluna < 0
+                || linha >= blocosComColisao.length
+                || coluna >= blocosComColisao[0].length
+                || blocosComColisao[linha][coluna];
+    }
+
+    /**
      * Carrega o arquivo TSX indicado pelo mapa e a imagem PNG
      * que contém todos os tiles.
      */
@@ -509,7 +652,10 @@ public class CarregadorMapa {
          * A margem deixa a caixa de colisão um pouco menor que o desenho
          * do jogador, tornando a passagem pelos corredores mais natural.
          */
-        double margem = 5.0;
+        double margem = Math.min(
+                5.0,
+                Math.min(largura, altura) / 4.0
+        );
 
         int colunaEsquerda = (int) ((x + margem) / larguraTileMapa);
         int colunaDireita = (int) (
