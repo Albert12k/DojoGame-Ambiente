@@ -11,7 +11,11 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -35,6 +39,10 @@ public class CarregadorMapa {
      * A chave é o nome do objeto, como "spawn_jogador".
      */
     private final Map<String, Point2D> pontosImportantes = new HashMap<>();
+
+    // Rotas desenhadas como polylines na camada RotasGuardas do Tiled.
+    private final Map<String, List<Point2D>> rotasGuardas =
+            new LinkedHashMap<>();
 
     /**
      * Procura um mapa dentro da pasta de recursos "maps".
@@ -75,6 +83,9 @@ public class CarregadorMapa {
 
         // Lê os pontos especiais antes de criar os elementos do jogo.
         carregarPontosImportantes(mapa);
+
+        // Lê também os caminhos que serão percorridos pelos guardas.
+        carregarRotasGuardas(mapa);
 
         // Inicialmente nenhuma posição do mapa possui colisão.
         blocosComColisao = new boolean[alturaEmTiles][larguraEmTiles];
@@ -193,6 +204,87 @@ public class CarregadorMapa {
         }
 
         return ponto;
+    }
+
+    /**
+     * Lê as polylines da camada RotasGuardas.
+     *
+     * Os pontos de uma polyline são relativos à posição X/Y do objeto.
+     * Por isso, cada ponto é convertido para uma coordenada absoluta do mapa.
+     */
+    private void carregarRotasGuardas(Element mapa) {
+        rotasGuardas.clear();
+
+        NodeList gruposDeObjetos = mapa.getElementsByTagName("objectgroup");
+
+        for (int indiceGrupo = 0;
+             indiceGrupo < gruposDeObjetos.getLength();
+             indiceGrupo++) {
+
+            Element grupo = (Element) gruposDeObjetos.item(indiceGrupo);
+
+            if (!"RotasGuardas".equalsIgnoreCase(
+                    grupo.getAttribute("name")
+            )) {
+                continue;
+            }
+
+            NodeList objetos = grupo.getElementsByTagName("object");
+
+            for (int indiceObjeto = 0;
+                 indiceObjeto < objetos.getLength();
+                 indiceObjeto++) {
+
+                Element objeto = (Element) objetos.item(indiceObjeto);
+                String nome = objeto.getAttribute("name");
+                NodeList polylines = objeto.getElementsByTagName("polyline");
+
+                if (nome.isBlank() || polylines.getLength() == 0) {
+                    continue;
+                }
+
+                double origemX = Double.parseDouble(objeto.getAttribute("x"));
+                double origemY = Double.parseDouble(objeto.getAttribute("y"));
+
+                Element polyline = (Element) polylines.item(0);
+                String[] pontosTexto = polyline
+                        .getAttribute("points")
+                        .trim()
+                        .split("\\s+");
+
+                List<Point2D> pontosDaRota = new ArrayList<>();
+
+                for (String pontoTexto : pontosTexto) {
+                    String[] coordenadas = pontoTexto.split(",");
+
+                    if (coordenadas.length != 2) {
+                        continue;
+                    }
+
+                    double x = origemX + Double.parseDouble(coordenadas[0]);
+                    double y = origemY + Double.parseDouble(coordenadas[1]);
+                    pontosDaRota.add(new Point2D(x, y));
+                }
+
+                // Uma patrulha precisa de pelo menos origem e destino.
+                if (pontosDaRota.size() >= 2) {
+                    rotasGuardas.put(nome, List.copyOf(pontosDaRota));
+                }
+            }
+
+            return;
+        }
+
+        throw new IllegalStateException(
+                "A camada RotasGuardas não foi encontrada no mapa."
+        );
+    }
+
+    /**
+     * Retorna as rotas encontradas sem permitir alterações externas.
+     */
+    public Map<String, List<Point2D>> obterRotasGuardas() {
+        return Collections.unmodifiableMap(rotasGuardas);
     }
 
     /**

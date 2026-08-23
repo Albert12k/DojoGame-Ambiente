@@ -12,7 +12,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -89,6 +91,19 @@ public class Main extends Application {
          * Assim, o jogador será desenhado por cima dos tiles.
          */
         mundo.getChildren().add(visualMapa);
+
+        /*
+         * Cria um guarda provisório para cada rota desenhada no Tiled.
+         * Eles são adicionados antes do jogador para ficarem atrás dele.
+         */
+        List<GuardaPatrulha> guardas = new ArrayList<>();
+
+        carregadorMapa.obterRotasGuardas().forEach((nome, rota) -> {
+            GuardaPatrulha guarda = new GuardaPatrulha(rota);
+            guarda.setId(nome);
+            guardas.add(guarda);
+            mundo.getChildren().add(guarda);
+        });
 
         /*
          * Cria um jogador provisório.
@@ -227,8 +242,16 @@ public class Main extends Application {
                 double tempoDecorrido =
                         (tempoAtual - tempoAnterior) / 1_000_000_000.0;
 
+                // Evita saltos grandes quando a janela fica momentaneamente parada.
+                tempoDecorrido = Math.min(tempoDecorrido, 0.05);
+
                 // Atualiza o tempo usado no próximo quadro.
                 tempoAnterior = tempoAtual;
+
+                // Atualiza todos os guardas usando as rotas do mapa.
+                for (GuardaPatrulha guarda : guardas) {
+                    guarda.atualizar(tempoDecorrido);
+                }
 
                 // Direção horizontal do jogador.
                 double direcaoX = 0;
