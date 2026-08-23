@@ -1,4 +1,4 @@
-package com.dojogame.mapa;
+package com.dojogame;
 
 import java.net.URL;
 

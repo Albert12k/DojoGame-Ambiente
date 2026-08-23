@@ -9,6 +9,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
+import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -46,6 +47,22 @@ public class Main extends Application {
      */
     @Override
     public void start(Stage janela) {
+
+        /*
+         * Cria o carregador e procura o mapa do labirinto
+         * dentro da pasta de recursos configurada no pom.xml.
+         */
+        CarregadorMapa carregadorMapa = new CarregadorMapa();
+
+        URL enderecoMapa =
+                carregadorMapa.localizarMapa("entrada_labirinto.tmx");
+
+        /*
+         * Exibe o endereço encontrado no console.
+         * Este é um teste temporário para confirmar que o JavaFX
+         * consegue acessar o arquivo antes de tentarmos desenhá-lo.
+         */
+        System.out.println("Mapa encontrado: " + enderecoMapa);
 
         // Painel que receberá todos os elementos visuais do jogo.
         Pane raiz = new Pane();
