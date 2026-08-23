@@ -1,5 +1,6 @@
 package com.dojogame;
 
+import javafx.geometry.Point2D;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
@@ -10,6 +11,8 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Responsável por localizar, interpretar e desenhar
@@ -26,6 +29,12 @@ public class CarregadorMapa {
     // Medidas utilizadas para converter pixels em linhas e colunas.
     private int larguraTileMapa;
     private int alturaTileMapa;
+
+    /*
+     * Guarda os pontos criados na camada PontosImportantes do Tiled.
+     * A chave é o nome do objeto, como "spawn_jogador".
+     */
+    private final Map<String, Point2D> pontosImportantes = new HashMap<>();
 
     /**
      * Procura um mapa dentro da pasta de recursos "maps".
@@ -63,6 +72,9 @@ public class CarregadorMapa {
         int alturaEmTiles = lerInteiro(mapa, "height");
         larguraTileMapa = lerInteiro(mapa, "tilewidth");
         alturaTileMapa = lerInteiro(mapa, "tileheight");
+
+        // Lê os pontos especiais antes de criar os elementos do jogo.
+        carregarPontosImportantes(mapa);
 
         // Inicialmente nenhuma posição do mapa possui colisão.
         blocosComColisao = new boolean[alturaEmTiles][larguraEmTiles];
@@ -107,6 +119,80 @@ public class CarregadorMapa {
         }
 
         return canvasMapa;
+    }
+
+    /**
+     * Lê os objetos da camada PontosImportantes criada no Tiled.
+     *
+     * Cada objeto encontrado é armazenado pelo seu nome e pelas
+     * coordenadas X e Y registradas dentro do arquivo TMX.
+     */
+    private void carregarPontosImportantes(Element mapa) {
+        // Limpa os pontos anteriores caso outro mapa seja carregado.
+        pontosImportantes.clear();
+
+        NodeList gruposDeObjetos = mapa.getElementsByTagName("objectgroup");
+
+        for (int indiceGrupo = 0;
+             indiceGrupo < gruposDeObjetos.getLength();
+             indiceGrupo++) {
+
+            Element grupo = (Element) gruposDeObjetos.item(indiceGrupo);
+
+            // Ignora as outras camadas, como RotasGuardas.
+            if (!"PontosImportantes".equalsIgnoreCase(
+                    grupo.getAttribute("name")
+            )) {
+                continue;
+            }
+
+            NodeList objetos = grupo.getElementsByTagName("object");
+
+            for (int indiceObjeto = 0;
+                 indiceObjeto < objetos.getLength();
+                 indiceObjeto++) {
+
+                Element objeto = (Element) objetos.item(indiceObjeto);
+                String nome = objeto.getAttribute("name");
+
+                // Um objeto sem nome não pode ser solicitado pelo jogo.
+                if (nome.isBlank()) {
+                    continue;
+                }
+
+                double x = Double.parseDouble(objeto.getAttribute("x"));
+                double y = Double.parseDouble(objeto.getAttribute("y"));
+
+                pontosImportantes.put(nome, new Point2D(x, y));
+            }
+
+            // Existe apenas uma camada PontosImportantes neste mapa.
+            return;
+        }
+
+        throw new IllegalStateException(
+                "A camada PontosImportantes não foi encontrada no mapa."
+        );
+    }
+
+    /**
+     * Obtém a posição de um ponto criado no Tiled.
+     *
+     * Este método deve ser chamado depois de carregarVisualMapa().
+     *
+     * @param nome nome exato do objeto dentro do Tiled.
+     * @return coordenadas do ponto dentro do mapa.
+     */
+    public Point2D obterPontoImportante(String nome) {
+        Point2D ponto = pontosImportantes.get(nome);
+
+        if (ponto == null) {
+            throw new IllegalStateException(
+                    "O ponto importante não foi encontrado: " + nome
+            );
+        }
+
+        return ponto;
     }
 
     /**

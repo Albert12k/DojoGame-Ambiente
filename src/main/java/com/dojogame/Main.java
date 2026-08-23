@@ -2,8 +2,10 @@ package com.dojogame;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.geometry.Point2D;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
+import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
@@ -23,6 +25,12 @@ import java.util.Set;
  * - Atualizar a movimentação do jogador.
  */
 public class Main extends Application {
+
+    // Largura da área visível do jogo em pixels.
+    private static final double LARGURA_JANELA = 960.0;
+
+    // Altura da área visível do jogo em pixels.
+    private static final double ALTURA_JANELA = 640.0;
 
     /*
      * Guarda todas as teclas que estão pressionadas.
@@ -58,17 +66,29 @@ public class Main extends Application {
         Canvas visualMapa =
                 carregadorMapa.carregarVisualMapa("entrada_labirinto.tmx");
 
-        // Painel que receberá todos os elementos visuais do jogo.
-        Pane raiz = new Pane();
+        /*
+         * Também busca a posição da saída criada no Tiled.
+         * Esse ponto será utilizado para detectar a chegada do jogador.
+         */
+        Point2D pontoSaida =
+                carregadorMapa.obterPontoImportante("saida_escadaria");
 
-        // Faz o tamanho do painel acompanhar o tamanho completo do mapa.
-        raiz.setPrefSize(visualMapa.getWidth(), visualMapa.getHeight());
+        /*
+         * Painel que representa o mundo completo do jogo.
+         *
+         * O mapa e o jogador ficarão dentro dele. A câmera será simulada
+         * movimentando este painel na direção contrária ao jogador.
+         */
+        Pane mundo = new Pane();
+
+        // Faz o tamanho do mundo acompanhar o tamanho completo do mapa.
+        mundo.setPrefSize(visualMapa.getWidth(), visualMapa.getHeight());
 
         /*
          * O mapa precisa ser adicionado antes do jogador.
          * Assim, o jogador será desenhado por cima dos tiles.
          */
-        raiz.getChildren().add(visualMapa);
+        mundo.getChildren().add(visualMapa);
 
         /*
          * Cria um jogador provisório.
@@ -81,25 +101,83 @@ public class Main extends Application {
         // Define a cor provisória do jogador.
         jogador.setFill(Color.DODGERBLUE);
 
+        // Busca no arquivo TMX o ponto criado com esse nome no Tiled.
+        Point2D pontoSpawn =
+                carregadorMapa.obterPontoImportante("spawn_jogador");
+
         /*
-         * Coloca o jogador próximo ao ponto spawn_jogador
-         * definido na entrada inferior do mapa do Tiled.
+         * No Tiled, o ponto marca o centro inferior do personagem.
+         * Por isso descontamos metade da largura e toda a altura.
          */
-        jogador.setX(609);
-        jogador.setY(928);
+        double posicaoInicialX =
+                pontoSpawn.getX() - jogador.getWidth() / 2.0;
+        double posicaoInicialY =
+                pontoSpawn.getY() - jogador.getHeight();
+
+        /*
+         * Também limitamos a posição ao tamanho do mapa, pois o marcador
+         * pode estar exatamente sobre a borda inferior do cenário.
+         */
+        jogador.setX(Math.max(
+                0,
+                Math.min(
+                        posicaoInicialX,
+                        visualMapa.getWidth() - jogador.getWidth()
+                )
+        ));
+
+        jogador.setY(Math.max(
+                0,
+                Math.min(
+                        posicaoInicialY,
+                        visualMapa.getHeight() - jogador.getHeight()
+                )
+        ));
 
         // Adiciona o jogador ao painel principal.
-        raiz.getChildren().add(jogador);
+        mundo.getChildren().add(jogador);
 
-        // Cria a cena com o mesmo tamanho em pixels do tilemap.
-        Scene cena = new Scene(
-                raiz,
-                visualMapa.getWidth(),
-                visualMapa.getHeight()
+        /*
+         * Este painel representa somente a parte do mundo que aparece
+         * dentro da janela. Ele funciona como a área visível da câmera.
+         */
+        Pane areaVisivel = new Pane();
+        areaVisivel.getChildren().add(mundo);
+
+        /*
+         * Aviso exibido quando o jogador alcança a saída do labirinto.
+         * Como ele pertence à área visível, e não ao mundo, permanece
+         * parado na tela mesmo enquanto a câmera se movimenta.
+         */
+        Label avisoSaida = new Label(
+                "Saída encontrada: escadaria do dojo"
         );
 
+        // Define uma aparência provisória de interface para o aviso.
+        avisoSaida.setStyle(
+                "-fx-background-color: rgba(15, 18, 22, 0.90);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 18px;"
+                        + "-fx-padding: 12px 18px;"
+                        + "-fx-background-radius: 8px;"
+        );
+
+        // Posiciona a mensagem no canto superior esquerdo da janela.
+        avisoSaida.setLayoutX(20);
+        avisoSaida.setLayoutY(20);
+
+        // O aviso começa escondido e não interfere com o mouse.
+        avisoSaida.setVisible(false);
+        avisoSaida.setMouseTransparent(true);
+
+        // Adiciona depois do mundo para desenhá-lo por cima do mapa.
+        areaVisivel.getChildren().add(avisoSaida);
+
+        // Cria uma janela menor que o mapa para permitir o uso da câmera.
+        Scene cena = new Scene(areaVisivel, LARGURA_JANELA, ALTURA_JANELA);
+
         // Define uma cor escura temporária para o fundo.
-        raiz.setStyle("-fx-background-color: #20252b;");
+        areaVisivel.setStyle("-fx-background-color: #20252b;");
 
         /*
          * Quando uma tecla for pressionada,
@@ -245,6 +323,18 @@ public class Main extends Application {
                 )) {
                     jogador.setY(novaPosicaoY);
                 }
+
+                /*
+                 * Reposiciona o mundo depois de atualizar o jogador.
+                 * Isso produz o efeito de uma câmera acompanhando-o.
+                 */
+                atualizarCamera(mundo, jogador, cena, visualMapa);
+
+                /*
+                 * Verifica continuamente se o jogador chegou perto
+                 * do ponto saida_escadaria definido no Tiled.
+                 */
+                atualizarAvisoSaida(jogador, pontoSaida, avisoSaida);
             }
         };
 
@@ -259,6 +349,93 @@ public class Main extends Application {
         janela.setResizable(false);
 
         janela.show();
+
+        // Posiciona a câmera corretamente antes do primeiro movimento.
+        atualizarCamera(mundo, jogador, cena, visualMapa);
+
+        // Confere também a saída antes do primeiro quadro do jogo.
+        atualizarAvisoSaida(jogador, pontoSaida, avisoSaida);
+    }
+
+    /**
+     * Exibe ou esconde o aviso da saída conforme a distância do jogador.
+     *
+     * @param jogador representação provisória do jogador.
+     * @param pontoSaida posição da saída carregada do Tiled.
+     * @param avisoSaida mensagem mostrada na interface.
+     */
+    private void atualizarAvisoSaida(
+            Rectangle jogador,
+            Point2D pontoSaida,
+            Label avisoSaida
+    ) {
+        // Usa o centro do jogador para medir a distância até a saída.
+        Point2D centroJogador = new Point2D(
+                jogador.getX() + jogador.getWidth() / 2.0,
+                jogador.getY() + jogador.getHeight() / 2.0
+        );
+
+        /*
+         * A saída é considerada alcançada dentro de um raio de 48 pixels,
+         * equivalente a um bloco e meio do nosso mapa.
+         */
+        double distanciaAteSaida = centroJogador.distance(pontoSaida);
+        boolean jogadorChegouNaSaida = distanciaAteSaida <= 48.0;
+
+        avisoSaida.setVisible(jogadorChegouNaSaida);
+    }
+
+    /**
+     * Move o painel do mundo para manter o jogador visível.
+     *
+     * A câmera tenta centralizar o jogador, mas é limitada pelas bordas
+     * do mapa para nunca mostrar uma região vazia fora do cenário.
+     *
+     * @param mundo painel que contém o mapa e os personagens.
+     * @param jogador representação provisória do jogador.
+     * @param cena área visível da janela.
+     * @param visualMapa Canvas que informa o tamanho completo do mapa.
+     */
+    private void atualizarCamera(
+            Pane mundo,
+            Rectangle jogador,
+            Scene cena,
+            Canvas visualMapa
+    ) {
+        // Centro atual do jogador nas coordenadas do mapa.
+        double centroJogadorX = jogador.getX() + jogador.getWidth() / 2.0;
+        double centroJogadorY = jogador.getY() + jogador.getHeight() / 2.0;
+
+        /*
+         * Calcula quanto o mundo precisa ser deslocado para que o centro
+         * do jogador coincida com o centro da área visível.
+         */
+        double deslocamentoX = cena.getWidth() / 2.0 - centroJogadorX;
+        double deslocamentoY = cena.getHeight() / 2.0 - centroJogadorY;
+
+        /*
+         * Estes são os menores deslocamentos permitidos. Por exemplo,
+         * quando a câmera chega ao lado direito, ela não pode continuar
+         * movendo o mapa para a esquerda e revelar uma área vazia.
+         */
+        double limiteMinimoX = cena.getWidth() - visualMapa.getWidth();
+        double limiteMinimoY = cena.getHeight() - visualMapa.getHeight();
+
+        // Limita a câmera horizontalmente entre as duas bordas do mapa.
+        deslocamentoX = Math.max(
+                Math.min(0, limiteMinimoX),
+                Math.min(deslocamentoX, 0)
+        );
+
+        // Limita a câmera verticalmente entre as duas bordas do mapa.
+        deslocamentoY = Math.max(
+                Math.min(0, limiteMinimoY),
+                Math.min(deslocamentoY, 0)
+        );
+
+        // Aplica o deslocamento calculado a todo o mundo do jogo.
+        mundo.setTranslateX(deslocamentoX);
+        mundo.setTranslateY(deslocamentoY);
     }
 
     /**
