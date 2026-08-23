@@ -3,13 +3,13 @@ package com.dojogame;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
-import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -48,24 +48,27 @@ public class Main extends Application {
     @Override
     public void start(Stage janela) {
 
-        /*
-         * Cria o carregador e procura o mapa do labirinto
-         * dentro da pasta de recursos configurada no pom.xml.
-         */
+        // Cria o objeto responsável por interpretar arquivos do Tiled.
         CarregadorMapa carregadorMapa = new CarregadorMapa();
 
-        URL enderecoMapa =
-                carregadorMapa.localizarMapa("entrada_labirinto.tmx");
-
         /*
-         * Exibe o endereço encontrado no console.
-         * Este é um teste temporário para confirmar que o JavaFX
-         * consegue acessar o arquivo antes de tentarmos desenhá-lo.
+         * Carrega todas as camadas de tiles do labirinto
+         * e as desenha em um Canvas do JavaFX.
          */
-        System.out.println("Mapa encontrado: " + enderecoMapa);
+        Canvas visualMapa =
+                carregadorMapa.carregarVisualMapa("entrada_labirinto.tmx");
 
         // Painel que receberá todos os elementos visuais do jogo.
         Pane raiz = new Pane();
+
+        // Faz o tamanho do painel acompanhar o tamanho completo do mapa.
+        raiz.setPrefSize(visualMapa.getWidth(), visualMapa.getHeight());
+
+        /*
+         * O mapa precisa ser adicionado antes do jogador.
+         * Assim, o jogador será desenhado por cima dos tiles.
+         */
+        raiz.getChildren().add(visualMapa);
 
         /*
          * Cria um jogador provisório.
@@ -78,15 +81,22 @@ public class Main extends Application {
         // Define a cor provisória do jogador.
         jogador.setFill(Color.DODGERBLUE);
 
-        // Coloca o jogador aproximadamente no centro da tela.
-        jogador.setX(464);
-        jogador.setY(304);
+        /*
+         * Coloca o jogador próximo ao ponto spawn_jogador
+         * definido na entrada inferior do mapa do Tiled.
+         */
+        jogador.setX(609);
+        jogador.setY(928);
 
         // Adiciona o jogador ao painel principal.
         raiz.getChildren().add(jogador);
 
-        // Cria a cena do jogo com 960x640 pixels.
-        Scene cena = new Scene(raiz, 960, 640);
+        // Cria a cena com o mesmo tamanho em pixels do tilemap.
+        Scene cena = new Scene(
+                raiz,
+                visualMapa.getWidth(),
+                visualMapa.getHeight()
+        );
 
         // Define uma cor escura temporária para o fundo.
         raiz.setStyle("-fx-background-color: #20252b;");
@@ -199,7 +209,7 @@ public class Main extends Application {
                 novaPosicaoX = Math.max(
                         0,
                         Math.min(novaPosicaoX,
-                                cena.getWidth() - jogador.getWidth())
+                                visualMapa.getWidth() - jogador.getWidth())
                 );
 
                 /*
@@ -209,12 +219,32 @@ public class Main extends Application {
                 novaPosicaoY = Math.max(
                         0,
                         Math.min(novaPosicaoY,
-                                cena.getHeight() - jogador.getHeight())
+                                visualMapa.getHeight() - jogador.getHeight())
                 );
 
-                // Aplica a nova posição ao jogador.
-                jogador.setX(novaPosicaoX);
-                jogador.setY(novaPosicaoY);
+                /*
+                 * Testa primeiro o movimento horizontal.
+                 * Separar os dois eixos permite que o jogador deslize
+                 * ao longo de uma parede em vez de ficar completamente preso.
+                 */
+                if (!carregadorMapa.possuiColisao(
+                        novaPosicaoX,
+                        jogador.getY(),
+                        jogador.getWidth(),
+                        jogador.getHeight()
+                )) {
+                    jogador.setX(novaPosicaoX);
+                }
+
+                // Depois testa o movimento vertical usando o novo X aprovado.
+                if (!carregadorMapa.possuiColisao(
+                        jogador.getX(),
+                        novaPosicaoY,
+                        jogador.getWidth(),
+                        jogador.getHeight()
+                )) {
+                    jogador.setY(novaPosicaoY);
+                }
             }
         };
 
@@ -224,6 +254,10 @@ public class Main extends Application {
         // Configura e exibe a janela.
         janela.setTitle("Hangetsu: Shadow Dojo");
         janela.setScene(cena);
+
+        // Mantém a janela no tamanho exato do mapa durante este primeiro teste.
+        janela.setResizable(false);
+
         janela.show();
     }
 
