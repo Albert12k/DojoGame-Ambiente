@@ -105,6 +105,7 @@ public class Main extends Application {
         carregadorMapa.obterRotasGuardas().forEach((nome, rota) -> {
             GuardaPatrulha guarda = new GuardaPatrulha(rota);
             guarda.setId(nome);
+            guarda.atualizarCampoVisao(carregadorMapa);
             guardas.add(guarda);
             mundo.getChildren().add(guarda);
         });
@@ -452,6 +453,14 @@ public class Main extends Application {
                             }
                         }
                     }
+                }
+
+                /*
+                 * Atualiza o desenho somente depois que todos os guardas se
+                 * moveram ou viraram, evitando um cone visual atrasado.
+                 */
+                for (GuardaPatrulha guarda : guardas) {
+                    guarda.atualizarCampoVisao(carregadorMapa);
                 }
 
                 // Atualiza disparos, colisões com paredes e dano no jogador.

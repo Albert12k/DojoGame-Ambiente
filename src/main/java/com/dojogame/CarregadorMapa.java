@@ -321,6 +321,39 @@ public class CarregadorMapa {
     }
 
     /**
+     * Mede quanto um raio pode avançar antes de encontrar uma colisão.
+     * É usado para o desenho do campo de visão não atravessar obstáculos.
+     */
+    public double obterAlcanceLivre(
+            Point2D origem,
+            Point2D direcao,
+            double alcanceMaximo
+    ) {
+        if (blocosComColisao == null || direcao.magnitude() == 0) {
+            return 0;
+        }
+
+        Point2D direcaoNormalizada = direcao.normalize();
+        double tamanhoPasso = 4.0;
+
+        for (double distancia = tamanhoPasso;
+             distancia <= alcanceMaximo;
+             distancia += tamanhoPasso) {
+            Point2D ponto = origem.add(
+                    direcaoNormalizada.multiply(distancia)
+            );
+            int coluna = (int) (ponto.getX() / larguraTileMapa);
+            int linha = (int) (ponto.getY() / alturaTileMapa);
+
+            if (posicaoDaGradeBloqueada(linha, coluna)) {
+                return Math.max(0, distancia - tamanhoPasso);
+            }
+        }
+
+        return alcanceMaximo;
+    }
+
+    /**
      * Encontra um caminho na grade para o guarda não atravessar paredes.
      */
     public List<Point2D> encontrarCaminho(

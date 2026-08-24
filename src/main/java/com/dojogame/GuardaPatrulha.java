@@ -5,10 +5,9 @@ import javafx.scene.Group;
 import javafx.scene.control.Label;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Arc;
-import javafx.scene.shape.ArcType;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Rotate;
 
@@ -21,10 +20,11 @@ public class GuardaPatrulha extends Pane {
     private static final double VELOCIDADE_PERSEGUICAO = 135.0;
     private static final double ALCANCE_VISAO = 190.0;
     private static final double METADE_ANGULO_VISAO = 32.0;
+    private static final int QUANTIDADE_RAIOS_VISAO = 32;
     private static final double INTERVALO_DISPARO = 1.0;
 
     private final List<Point2D> rotaPatrulha;
-    private final Arc coneVisao;
+    private final Polygon coneVisao;
     private final Rotate rotacaoVisao = new Rotate(0, 0, 0);
     private final Label exclamacao;
 
@@ -48,18 +48,10 @@ public class GuardaPatrulha extends Pane {
         rotaPatrulha = List.copyOf(rota);
 
         /*
-         * ArcType.ROUND cria um setor com duas laterais em V e uma borda
-         * arredondada. A rotação usa pivô 0,0 para permanecer presa ao guarda.
+         * O cone é um polígono reconstruído por pequenos raios. Isso permite
+         * que cada trecho pare exatamente ao encontrar uma árvore ou parede.
          */
-        coneVisao = new Arc(
-                0,
-                0,
-                ALCANCE_VISAO,
-                ALCANCE_VISAO,
-                -METADE_ANGULO_VISAO,
-                METADE_ANGULO_VISAO * 2
-        );
-        coneVisao.setType(ArcType.ROUND);
+        coneVisao = new Polygon();
         coneVisao.setFill(Color.rgb(255, 220, 70, 0.14));
         coneVisao.setStroke(Color.rgb(255, 220, 70, 0.55));
         coneVisao.setMouseTransparent(true);
@@ -246,6 +238,46 @@ public class GuardaPatrulha extends Pane {
         return false;
     }
 
+    /**
+     * Reconstrói o cone visível, limitando cada raio pelo primeiro obstáculo.
+     */
+    public void atualizarCampoVisao(CarregadorMapa carregadorMapa) {
+        coneVisao.getPoints().clear();
+        coneVisao.getPoints().addAll(0.0, 0.0);
+
+        double anguloDirecao = Math.atan2(
+                direcaoOlhar.getY(),
+                direcaoOlhar.getX()
+        );
+
+        for (int raio = 0; raio <= QUANTIDADE_RAIOS_VISAO; raio++) {
+            double proporcao = raio / (double) QUANTIDADE_RAIOS_VISAO;
+            double anguloLocalGraus = -METADE_ANGULO_VISAO
+                    + proporcao * METADE_ANGULO_VISAO * 2.0;
+            double anguloLocal = Math.toRadians(anguloLocalGraus);
+            double anguloMundo = anguloDirecao + anguloLocal;
+
+            Point2D direcaoRaio = new Point2D(
+                    Math.cos(anguloMundo),
+                    Math.sin(anguloMundo)
+            );
+            double alcanceLivre = carregadorMapa.obterAlcanceLivre(
+                    obterPosicao(),
+                    direcaoRaio,
+                    ALCANCE_VISAO
+            );
+
+            /*
+             * Os pontos ficam no sistema local do guarda. O grupo aplica a
+             * rotação geral, mantendo desenho e cálculo na mesma direção.
+             */
+            coneVisao.getPoints().addAll(
+                    Math.cos(anguloLocal) * alcanceLivre,
+                    Math.sin(anguloLocal) * alcanceLivre
+            );
+        }
+    }
+
     private boolean pontoEstaVisivel(
             Point2D ponto,
             CarregadorMapa carregadorMapa
@@ -354,5 +386,13 @@ public class GuardaPatrulha extends Pane {
         }
 
         indicePatrulha += sentidoPatrulha;
+
+        /*
+         * Vira o campo de visão no mesmo quadro em que troca de destino.
+         * Sem isso, a direção antiga permanecia ativa por um quadro.
+         */
+        atualizarDirecao(
+                rotaPatrulha.get(indicePatrulha).subtract(obterPosicao())
+        );
     }
 }
