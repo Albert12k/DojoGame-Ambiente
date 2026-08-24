@@ -76,12 +76,6 @@ public class Main extends Application {
         Point2D pontoSaida =
                 carregadorMapa.obterPontoImportante("saida_escadaria");
 
-        // Posição central para onde os guardas irão durante um alerta.
-        Point2D pontoEncontroGuardas =
-                carregadorMapa.obterPontoImportante(
-                        "ponto_encontro_guardas"
-                );
-
         /*
          * Painel que representa o mundo completo do jogo.
          *
@@ -264,6 +258,9 @@ public class Main extends Application {
             // Armazena o instante em que o quadro anterior foi executado.
             private long tempoAnterior = 0;
 
+            // Evita recalcular os caminhos em todos os quadros.
+            private double tempoParaRecalcularPerseguicao = 0;
+
             @Override
             public void handle(long tempoAtual) {
 
@@ -308,33 +305,45 @@ public class Main extends Application {
                         alertaAtivo[0] = true;
                         avisoAlerta.setVisible(true);
 
-                        /*
-                         * Distribui os guardas em uma pequena formação ao
-                         * redor do ponto de encontro para não empilhá-los.
-                         */
+                        // O alerta é compartilhado, mas nenhum guarda é criado.
+                        for (GuardaPatrulha guarda : guardas) {
+                            guarda.ativarAlerta();
+                        }
+                    }
+                } else {
+                    tempoParaRecalcularPerseguicao -= tempoDecorrido;
+
+                    if (tempoParaRecalcularPerseguicao <= 0) {
+                        Point2D centroJogador = new Point2D(
+                                jogador.getX() + jogador.getWidth() / 2.0,
+                                jogador.getY() + jogador.getHeight() / 2.0
+                        );
+                        List<Point2D> posicoesAoRedor =
+                                carregadorMapa.encontrarPosicoesAoRedor(
+                                        centroJogador,
+                                        guardas.size()
+                                );
+
                         for (int indice = 0;
                              indice < guardas.size();
                              indice++) {
                             GuardaPatrulha guarda = guardas.get(indice);
-                            double deslocamentoFormacao =
-                                    (indice - (guardas.size() - 1) / 2.0)
-                                            * 32.0;
-                            Point2D destinoDoGuarda = pontoEncontroGuardas.add(
-                                    deslocamentoFormacao,
-                                    0
+                            Point2D destino = posicoesAoRedor.get(
+                                    indice % posicoesAoRedor.size()
                             );
-
-                            List<Point2D> caminho =
+                            guarda.definirCaminhoPerseguicao(
                                     carregadorMapa.encontrarCaminho(
                                             guarda.obterPosicao(),
-                                            destinoDoGuarda
-                                    );
-                            guarda.entrarEmAlerta(caminho);
+                                            destino
+                                    )
+                            );
                         }
+
+                        tempoParaRecalcularPerseguicao = 0.35;
                     }
-                } else {
+
                     for (GuardaPatrulha guarda : guardas) {
-                        guarda.atualizarAlerta(tempoDecorrido);
+                        guarda.atualizarPerseguicao(tempoDecorrido);
 
                         if (!jogadorDerrotado[0]
                                 && guarda.podeDisparar(

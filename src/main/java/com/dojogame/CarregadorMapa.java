@@ -415,6 +415,93 @@ public class CarregadorMapa {
         return caminho;
     }
 
+    /**
+     * Escolhe posições livres e diferentes ao redor do jogador.
+     * Assim os guardas cercam o alvo em vez de ocuparem o mesmo ponto.
+     */
+    public List<Point2D> encontrarPosicoesAoRedor(
+            Point2D centro,
+            int quantidade
+    ) {
+        int linhaCentral = (int) (centro.getY() / alturaTileMapa);
+        int colunaCentral = (int) (centro.getX() / larguraTileMapa);
+
+        if (posicaoDaGradeBloqueada(linhaCentral, colunaCentral)) {
+            return List.of(centro);
+        }
+
+        int quantidadeLinhas = blocosComColisao.length;
+        int quantidadeColunas = blocosComColisao[0].length;
+        int[][] distancia = new int[quantidadeLinhas][quantidadeColunas];
+
+        for (int linha = 0; linha < quantidadeLinhas; linha++) {
+            java.util.Arrays.fill(distancia[linha], -1);
+        }
+
+        ArrayDeque<int[]> fila = new ArrayDeque<>();
+        List<Point2D> candidatas = new ArrayList<>();
+        fila.add(new int[]{linhaCentral, colunaCentral});
+        distancia[linhaCentral][colunaCentral] = 0;
+
+        int[][] direcoes = {
+                {-1, 0}, {0, 1}, {1, 0}, {0, -1}
+        };
+
+        while (!fila.isEmpty()) {
+            int[] atual = fila.removeFirst();
+            int distanciaAtual = distancia[atual[0]][atual[1]];
+
+            if (distanciaAtual >= 2 && distanciaAtual <= 8) {
+                candidatas.add(centroDoTile(atual[0], atual[1]));
+            }
+
+            if (distanciaAtual >= 8) {
+                continue;
+            }
+
+            for (int[] direcao : direcoes) {
+                int proximaLinha = atual[0] + direcao[0];
+                int proximaColuna = atual[1] + direcao[1];
+
+                if (posicaoDaGradeBloqueada(proximaLinha, proximaColuna)
+                        || distancia[proximaLinha][proximaColuna] != -1) {
+                    continue;
+                }
+
+                distancia[proximaLinha][proximaColuna] = distanciaAtual + 1;
+                fila.addLast(new int[]{proximaLinha, proximaColuna});
+            }
+        }
+
+        if (candidatas.isEmpty()) {
+            return List.of(centroDoTile(linhaCentral, colunaCentral));
+        }
+
+        // Ordena em volta do jogador para distribuir os guardas pelos lados.
+        candidatas.sort((primeira, segunda) -> Double.compare(
+                Math.atan2(
+                        primeira.getY() - centro.getY(),
+                        primeira.getX() - centro.getX()
+                ),
+                Math.atan2(
+                        segunda.getY() - centro.getY(),
+                        segunda.getX() - centro.getX()
+                )
+        ));
+
+        List<Point2D> escolhidas = new ArrayList<>();
+        int totalDesejado = Math.min(quantidade, candidatas.size());
+
+        for (int indice = 0; indice < totalDesejado; indice++) {
+            int indiceCandidata = (int) Math.floor(
+                    indice * candidatas.size() / (double) totalDesejado
+            );
+            escolhidas.add(candidatas.get(indiceCandidata));
+        }
+
+        return escolhidas;
+    }
+
     private Point2D centroDoTile(int linha, int coluna) {
         return new Point2D(
                 coluna * larguraTileMapa + larguraTileMapa / 2.0,
