@@ -51,6 +51,9 @@ public class Main extends Application {
      */
     private static final double VELOCIDADE_JOGADOR = 220.0;
 
+    // Tempo escondido necessário para os guardas abandonarem a perseguição.
+    private static final double TEMPO_PARA_PERDER_JOGADOR = 3.0;
+
     /**
      * Método executado quando o JavaFX é iniciado.
      *
@@ -113,6 +116,8 @@ public class Main extends Application {
         boolean[] alertaAtivo = {false};
         boolean[] jogadorDerrotado = {false};
         int[] vidaJogador = {100};
+        double[] tempoSemVerJogador = {0};
+        Point2D[] ultimaPosicaoVista = {new Point2D(0, 0)};
 
         /*
          * Cria um jogador provisório.
@@ -289,9 +294,13 @@ public class Main extends Application {
                 tempoAnterior = tempoAtual;
 
                 if (!alertaAtivo[0]) {
-                    // Enquanto ninguém viu o jogador, cada guarda patrulha.
+                    // Alguns podem ainda estar voltando para suas rotas.
                     for (GuardaPatrulha guarda : guardas) {
-                        guarda.atualizarPatrulha(tempoDecorrido);
+                        if (guarda.estaRetornandoPatrulha()) {
+                            guarda.atualizarRetornoPatrulha(tempoDecorrido);
+                        } else {
+                            guarda.atualizarPatrulha(tempoDecorrido);
+                        }
                     }
 
                     boolean jogadorFoiVisto = guardas.stream().anyMatch(
@@ -303,66 +312,99 @@ public class Main extends Application {
 
                     if (jogadorFoiVisto) {
                         alertaAtivo[0] = true;
+                        tempoSemVerJogador[0] = 0;
+                        tempoParaRecalcularPerseguicao = 0;
+                        ultimaPosicaoVista[0] = centroDoJogador(jogador);
+                        avisoAlerta.setText(
+                                "ALERTA: os guardas viram você!"
+                        );
                         avisoAlerta.setVisible(true);
 
-                        // O alerta é compartilhado, mas nenhum guarda é criado.
                         for (GuardaPatrulha guarda : guardas) {
                             guarda.ativarAlerta();
                         }
                     }
                 } else {
-                    tempoParaRecalcularPerseguicao -= tempoDecorrido;
+                    boolean jogadorVisivelAgora = guardas.stream().anyMatch(
+                            guarda -> guarda.consegueVer(
+                                    jogador,
+                                    carregadorMapa
+                            )
+                    );
 
-                    if (tempoParaRecalcularPerseguicao <= 0) {
-                        Point2D centroJogador = new Point2D(
-                                jogador.getX() + jogador.getWidth() / 2.0,
-                                jogador.getY() + jogador.getHeight() / 2.0
+                    if (jogadorVisivelAgora) {
+                        tempoSemVerJogador[0] = 0;
+                        ultimaPosicaoVista[0] = centroDoJogador(jogador);
+                        avisoAlerta.setText(
+                                "ALERTA: os guardas viram você!"
                         );
-                        List<Point2D> posicoesAoRedor =
-                                carregadorMapa.encontrarPosicoesAoRedor(
-                                        centroJogador,
-                                        guardas.size()
-                                );
-
-                        for (int indice = 0;
-                             indice < guardas.size();
-                             indice++) {
-                            GuardaPatrulha guarda = guardas.get(indice);
-                            Point2D destino = posicoesAoRedor.get(
-                                    indice % posicoesAoRedor.size()
-                            );
-                            guarda.definirCaminhoPerseguicao(
-                                    carregadorMapa.encontrarCaminho(
-                                            guarda.obterPosicao(),
-                                            destino
-                                    )
-                            );
-                        }
-
-                        tempoParaRecalcularPerseguicao = 0.35;
+                    } else {
+                        tempoSemVerJogador[0] += tempoDecorrido;
+                        avisoAlerta.setText(
+                                "Os guardas estão procurando você..."
+                        );
                     }
 
-                    for (GuardaPatrulha guarda : guardas) {
-                        guarda.atualizarPerseguicao(tempoDecorrido);
+                    if (tempoSemVerJogador[0]
+                            >= TEMPO_PARA_PERDER_JOGADOR) {
+                        alertaAtivo[0] = false;
+                        avisoAlerta.setVisible(false);
 
-                        if (!jogadorDerrotado[0]
-                                && guarda.podeDisparar(
-                                        jogador,
-                                        carregadorMapa,
-                                        tempoDecorrido
-                                )) {
-                            Point2D centroJogador = new Point2D(
-                                    jogador.getX()
-                                            + jogador.getWidth() / 2.0,
-                                    jogador.getY()
-                                            + jogador.getHeight() / 2.0
+                        for (GuardaPatrulha guarda : guardas) {
+                            Point2D pontoDeRetorno =
+                                    guarda.obterPontoPatrulhaMaisProximo();
+                            guarda.iniciarRetornoPatrulha(
+                                    carregadorMapa.encontrarCaminho(
+                                            guarda.obterPosicao(),
+                                            pontoDeRetorno
+                                    ),
+                                    pontoDeRetorno
                             );
-                            Projetil projetil = new Projetil(
-                                    guarda.obterPosicao(),
-                                    centroJogador
-                            );
-                            projeteis.add(projetil);
-                            mundo.getChildren().add(projetil);
+                        }
+                    } else {
+                        tempoParaRecalcularPerseguicao -= tempoDecorrido;
+
+                        if (tempoParaRecalcularPerseguicao <= 0) {
+                            List<Point2D> posicoesAoRedor =
+                                    carregadorMapa.encontrarPosicoesAoRedor(
+                                            ultimaPosicaoVista[0],
+                                            guardas.size()
+                                    );
+
+                            for (int indice = 0;
+                                 indice < guardas.size();
+                                 indice++) {
+                                GuardaPatrulha guarda = guardas.get(indice);
+                                Point2D destino = posicoesAoRedor.get(
+                                        indice % posicoesAoRedor.size()
+                                );
+                                guarda.definirCaminhoPerseguicao(
+                                        carregadorMapa.encontrarCaminho(
+                                                guarda.obterPosicao(),
+                                                destino
+                                        )
+                                );
+                            }
+
+                            tempoParaRecalcularPerseguicao = 0.35;
+                        }
+
+                        for (GuardaPatrulha guarda : guardas) {
+                            guarda.atualizarPerseguicao(tempoDecorrido);
+
+                            if (!jogadorDerrotado[0]
+                                    && guarda.podeDisparar(
+                                            jogador,
+                                            carregadorMapa,
+                                            tempoDecorrido
+                                    )) {
+                                Projetil projetil = new Projetil(
+                                        guarda.obterPosicao(),
+                                        centroDoJogador(jogador)
+                                );
+                                projeteis.add(projetil);
+                                mundo.getChildren().add(projetil);
+                            }
                         }
                     }
                 }
@@ -526,6 +568,13 @@ public class Main extends Application {
 
         // Confere também a saída antes do primeiro quadro do jogo.
         atualizarAvisoSaida(jogador, pontoSaida, avisoSaida);
+    }
+
+    private Point2D centroDoJogador(Rectangle jogador) {
+        return new Point2D(
+                jogador.getX() + jogador.getWidth() / 2.0,
+                jogador.getY() + jogador.getHeight() / 2.0
+        );
     }
 
     /**
