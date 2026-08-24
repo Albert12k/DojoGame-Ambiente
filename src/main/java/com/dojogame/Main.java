@@ -115,6 +115,7 @@ public class Main extends Application {
         // Arrays permitem alterar esses valores dentro do AnimationTimer.
         boolean[] alertaAtivo = {false};
         boolean[] jogadorDerrotado = {false};
+        boolean[] faseConcluida = {false};
         int[] vidaJogador = {100};
         double[] tempoSemVerJogador = {0};
         Point2D[] ultimaPosicaoVista = {new Point2D(0, 0)};
@@ -179,7 +180,7 @@ public class Main extends Application {
          * parado na tela mesmo enquanto a câmera se movimenta.
          */
         Label avisoSaida = new Label(
-                "Saída encontrada: escadaria do dojo"
+                "Escadaria encontrada — pressione E para entrar"
         );
 
         // Define uma aparência provisória de interface para o aviso.
@@ -228,7 +229,34 @@ public class Main extends Application {
         indicadorVida.setLayoutY(20);
         indicadorVida.setMouseTransparent(true);
 
-        areaVisivel.getChildren().addAll(avisoAlerta, indicadorVida);
+        /*
+         * Painel central usado tanto ao concluir o labirinto quanto ao perder.
+         * Ele fica fora do mundo para não se mover junto com a câmera.
+         */
+        Label painelResultado = new Label();
+        painelResultado.setStyle(
+                "-fx-background-color: rgba(15, 18, 22, 0.95);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 22px;"
+                        + "-fx-font-weight: bold;"
+                        + "-fx-alignment: center;"
+                        + "-fx-text-alignment: center;"
+                        + "-fx-padding: 24px;"
+                        + "-fx-background-radius: 12px;"
+                        + "-fx-border-color: rgba(255, 255, 255, 0.25);"
+                        + "-fx-border-radius: 12px;"
+        );
+        painelResultado.setLayoutX((LARGURA_JANELA - 460) / 2.0);
+        painelResultado.setLayoutY((ALTURA_JANELA - 190) / 2.0);
+        painelResultado.setPrefSize(460, 190);
+        painelResultado.setVisible(false);
+        painelResultado.setMouseTransparent(true);
+
+        areaVisivel.getChildren().addAll(
+                avisoAlerta,
+                indicadorVida,
+                painelResultado
+        );
 
         // Cria uma janela menor que o mapa para permitir o uso da câmera.
         Scene cena = new Scene(areaVisivel, LARGURA_JANELA, ALTURA_JANELA);
@@ -292,6 +320,23 @@ public class Main extends Application {
 
                 // Atualiza o tempo usado no próximo quadro.
                 tempoAnterior = tempoAtual;
+
+                /*
+                 * Depois da vitória ou derrota, R recria a fase inteira.
+                 * O loop antigo é encerrado antes de montar a nova cena.
+                 */
+                if ((faseConcluida[0] || jogadorDerrotado[0])
+                        && teclasPressionadas.contains(KeyCode.R)) {
+                    stop();
+                    teclasPressionadas.clear();
+                    Main.this.start(janela);
+                    return;
+                }
+
+                // Congela guardas, disparos e jogador enquanto o resultado aparece.
+                if (faseConcluida[0] || jogadorDerrotado[0]) {
+                    return;
+                }
 
                 if (!alertaAtivo[0]) {
                     // Alguns podem ainda estar voltando para suas rotas.
@@ -424,9 +469,14 @@ public class Main extends Application {
 
                         if (vidaJogador[0] == 0) {
                             jogadorDerrotado[0] = true;
-                            avisoAlerta.setText(
-                                    "Você foi derrotado pelos guardas"
+                            avisoAlerta.setVisible(false);
+                            avisoSaida.setVisible(false);
+                            painelResultado.setText(
+                                    "Você foi derrotado\n\n"
+                                            + "Pressione R para tentar novamente"
                             );
+                            painelResultado.setVisible(true);
+                            teclasPressionadas.clear();
                         }
                     }
 
@@ -547,7 +597,25 @@ public class Main extends Application {
                  * Verifica continuamente se o jogador chegou perto
                  * do ponto saida_escadaria definido no Tiled.
                  */
-                atualizarAvisoSaida(jogador, pontoSaida, avisoSaida);
+                boolean jogadorNaSaida = atualizarAvisoSaida(
+                        jogador,
+                        pontoSaida,
+                        avisoSaida
+                );
+
+                if (jogadorNaSaida
+                        && teclasPressionadas.contains(KeyCode.E)) {
+                    faseConcluida[0] = true;
+                    avisoSaida.setVisible(false);
+                    avisoAlerta.setVisible(false);
+                    painelResultado.setText(
+                            "Labirinto concluído!\n"
+                                    + "Próxima área: escadaria do dojo\n\n"
+                                    + "Pressione R para jogar novamente"
+                    );
+                    painelResultado.setVisible(true);
+                    teclasPressionadas.clear();
+                }
             }
         };
 
@@ -584,7 +652,7 @@ public class Main extends Application {
      * @param pontoSaida posição da saída carregada do Tiled.
      * @param avisoSaida mensagem mostrada na interface.
      */
-    private void atualizarAvisoSaida(
+    private boolean atualizarAvisoSaida(
             Rectangle jogador,
             Point2D pontoSaida,
             Label avisoSaida
@@ -603,6 +671,7 @@ public class Main extends Application {
         boolean jogadorChegouNaSaida = distanciaAteSaida <= 48.0;
 
         avisoSaida.setVisible(jogadorChegouNaSaida);
+        return jogadorChegouNaSaida;
     }
 
     /**
