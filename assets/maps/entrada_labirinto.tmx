@@ -167,9 +167,6 @@
   <object id="16" name="patrulha_superior" x="518" y="340">
    <polyline points="0,0 -84,4 -80,-66"/>
   </object>
-  <object id="17" name="patrulha_oeste" x="136" y="860">
-   <polyline points="0,0 4,54 42,54 82,52"/>
-  </object>
   <object id="18" name="patrulha_saida" x="764" y="144">
    <polyline points="0,0 98,-6 150,-8 150,78"/>
   </object>
