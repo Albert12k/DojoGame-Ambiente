@@ -9,6 +9,7 @@ import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
@@ -148,6 +149,10 @@ public class Main extends Application {
         int[] bombasFumaca = {0};
         int[] kitsMedicos = {0};
         boolean[] teclaEConsumida = {false};
+        boolean[] teclaHConsumida = {false};
+        boolean[] teclaQConsumida = {false};
+        Circle[] nuvemFumaca = {null};
+        double[] tempoFumaca = {0};
         double[] tempoMensagemColeta = {0};
         double[] tempoSemVerJogador = {0};
         Point2D[] ultimaPosicaoVista = {new Point2D(0, 0)};
@@ -292,6 +297,21 @@ public class Main extends Application {
         indicadorInventario.setVisible(armazem);
         indicadorInventario.setMouseTransparent(true);
 
+
+        Label controlesItens =
+                new Label("H: usar kit médico  |  Q: bomba de fumaça");
+        controlesItens.setStyle(
+                "-fx-background-color: rgba(15, 18, 22, 0.82);"
+                        + "-fx-text-fill: #d8dde6;"
+                        + "-fx-font-size: 13px;"
+                        + "-fx-padding: 7px 11px;"
+                        + "-fx-background-radius: 7px;"
+        );
+        controlesItens.setLayoutX(LARGURA_JANELA - 350);
+        controlesItens.setLayoutY(121);
+        controlesItens.setVisible(armazem);
+        controlesItens.setMouseTransparent(true);
+
         Label avisoColeta = new Label();
         avisoColeta.setStyle(
                 "-fx-background-color: rgba(20, 82, 48, 0.94);"
@@ -333,6 +353,7 @@ public class Main extends Application {
                 avisoAlerta,
                 indicadorVida,
                 indicadorInventario,
+                controlesItens,
                 avisoBau,
                 avisoColeta,
                 painelResultado
@@ -432,11 +453,86 @@ public class Main extends Application {
                 if (!teclaEPressionada) {
                     teclaEConsumida[0] = false;
                 }
+                if (!teclasPressionadas.contains(KeyCode.H)) {
+                    teclaHConsumida[0] = false;
+                }
+                if (!teclasPressionadas.contains(KeyCode.Q)) {
+                    teclaQConsumida[0] = false;
+                }
 
                 // Congela guardas, disparos e jogador enquanto o resultado aparece.
                 if (faseConcluida[0] || jogadorDerrotado[0]) {
                     return;
                 }
+
+
+                // A nuvem permanece no lugar em que a bomba foi lançada.
+                if (nuvemFumaca[0] != null) {
+                    tempoFumaca[0] -= tempoDecorrido;
+
+                    if (tempoFumaca[0] <= 0) {
+                        mundo.getChildren().remove(nuvemFumaca[0]);
+                        nuvemFumaca[0] = null;
+                    }
+                }
+
+                if (armazem
+                        && teclasPressionadas.contains(KeyCode.H)
+                        && !teclaHConsumida[0]
+                        && kitsMedicos[0] > 0
+                        && vidaJogador[0] < 100) {
+                    teclaHConsumida[0] = true;
+                    kitsMedicos[0]--;
+                    vidaJogador[0] = Math.min(100, vidaJogador[0] + 30);
+                    indicadorVida.setText("Vida: " + vidaJogador[0]);
+                    indicadorInventario.setText(
+                            "Shurikens: " + shurikens[0]
+                                    + "  |  Fumaça: " + bombasFumaca[0]
+                                    + "  |  Kits: " + kitsMedicos[0]
+                    );
+                    avisoColeta.setText("Kit médico usado: +30 de vida");
+                    tempoMensagemColeta[0] = 2.5;
+                }
+
+                if (armazem
+                        && teclasPressionadas.contains(KeyCode.Q)
+                        && !teclaQConsumida[0]
+                        && bombasFumaca[0] > 0
+                        && nuvemFumaca[0] == null) {
+                    teclaQConsumida[0] = true;
+                    bombasFumaca[0]--;
+
+                    Point2D centroFumaca = centroDoJogador(jogador);
+                    Circle novaNuvem = new Circle(
+                            centroFumaca.getX(),
+                            centroFumaca.getY(),
+                            72,
+                            Color.rgb(125, 132, 140, 0.58)
+                    );
+                    novaNuvem.setStroke(Color.rgb(205, 210, 215, 0.68));
+                    novaNuvem.setStrokeWidth(3);
+                    novaNuvem.setMouseTransparent(true);
+                    nuvemFumaca[0] = novaNuvem;
+                    tempoFumaca[0] = 5.0;
+                    mundo.getChildren().add(novaNuvem);
+
+                    indicadorInventario.setText(
+                            "Shurikens: " + shurikens[0]
+                                    + "  |  Fumaça: " + bombasFumaca[0]
+                                    + "  |  Kits: " + kitsMedicos[0]
+                    );
+                    avisoColeta.setText(
+                            "Bomba de fumaça usada: visão bloqueada por 5s"
+                    );
+                    tempoMensagemColeta[0] = 2.5;
+                }
+
+                boolean jogadorProtegidoPelaFumaca =
+                        nuvemFumaca[0] != null
+                                && centroDoJogador(jogador).distance(
+                                        nuvemFumaca[0].getCenterX(),
+                                        nuvemFumaca[0].getCenterY()
+                                ) <= nuvemFumaca[0].getRadius();
 
                 if (!alertaAtivo[0]) {
                     // Alguns podem ainda estar voltando para suas rotas.
@@ -448,7 +544,9 @@ public class Main extends Application {
                         }
                     }
 
-                    boolean jogadorFoiVisto = guardas.stream().anyMatch(
+                    boolean jogadorFoiVisto =
+                            !jogadorProtegidoPelaFumaca
+                                    && guardas.stream().anyMatch(
                             guarda -> guarda.consegueVer(
                                     jogador,
                                     carregadorMapa
@@ -470,7 +568,9 @@ public class Main extends Application {
                         }
                     }
                 } else {
-                    boolean jogadorVisivelAgora = guardas.stream().anyMatch(
+                    boolean jogadorVisivelAgora =
+                            !jogadorProtegidoPelaFumaca
+                                    && guardas.stream().anyMatch(
                             guarda -> guarda.consegueVer(
                                     jogador,
                                     carregadorMapa
@@ -541,6 +641,7 @@ public class Main extends Application {
                             );
 
                             if (!jogadorDerrotado[0]
+                                    && !jogadorProtegidoPelaFumaca
                                     && guarda.podeDisparar(
                                             jogador,
                                             carregadorMapa,
