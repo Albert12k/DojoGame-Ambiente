@@ -134,6 +134,9 @@ public class Main extends Application {
         // Disparos existentes no mundo durante o estado de alerta.
         List<Projetil> projeteis = new ArrayList<>();
 
+        // Shurikens que o jogador lançou e ainda estão voando.
+        List<ShurikenJogador> shurikensLancadas = new ArrayList<>();
+
         // Baús desenhados como retângulos na camada ItensInterativos.
         List<CarregadorMapa.ObjetoInterativo> baus =
                 carregadorMapa.obterItensInterativos().stream()
@@ -153,6 +156,8 @@ public class Main extends Application {
         boolean[] teclaEConsumida = {false};
         boolean[] teclaHConsumida = {false};
         boolean[] teclaQConsumida = {false};
+        boolean[] teclaEspacoConsumida = {false};
+        Point2D[] ultimaDirecaoJogador = {new Point2D(0, -1)};
         Circle[] nuvemFumaca = {null};
         double[] tempoFumaca = {0};
         double[] tempoMensagemColeta = {0};
@@ -302,7 +307,9 @@ public class Main extends Application {
 
 
         Label controlesItens =
-                new Label("H: usar kit médico  |  Q: bomba de fumaça");
+                new Label(
+                        "Espaço: shuriken  |  H: kit  |  Q: fumaça"
+                );
         controlesItens.setStyle(
                 "-fx-background-color: rgba(15, 18, 22, 0.82);"
                         + "-fx-text-fill: #d8dde6;"
@@ -463,6 +470,9 @@ public class Main extends Application {
                 if (!teclasPressionadas.contains(KeyCode.Q)) {
                     teclaQConsumida[0] = false;
                 }
+                if (!teclasPressionadas.contains(KeyCode.SPACE)) {
+                    teclaEspacoConsumida[0] = false;
+                }
 
                 // Congela guardas, disparos e jogador enquanto o resultado aparece.
                 if (faseConcluida[0] || jogadorDerrotado[0]) {
@@ -529,6 +539,28 @@ public class Main extends Application {
                             "Bomba de fumaça usada: visão bloqueada por 5s"
                     );
                     tempoMensagemColeta[0] = 2.5;
+                }
+
+
+                if (armazem
+                        && teclasPressionadas.contains(KeyCode.SPACE)
+                        && !teclaEspacoConsumida[0]
+                        && shurikens[0] > 0) {
+                    teclaEspacoConsumida[0] = true;
+                    shurikens[0]--;
+
+                    ShurikenJogador shuriken = new ShurikenJogador(
+                            centroDoJogador(jogador),
+                            ultimaDirecaoJogador[0]
+                    );
+                    shurikensLancadas.add(shuriken);
+                    mundo.getChildren().add(shuriken);
+
+                    indicadorInventario.setText(
+                            "Shurikens: " + shurikens[0]
+                                    + "  |  Fumaça: " + bombasFumaca[0]
+                                    + "  |  Kits: " + kitsMedicos[0]
+                    );
                 }
 
                 boolean jogadorProtegidoPelaFumaca =
@@ -703,6 +735,39 @@ public class Main extends Application {
                     }
                 }
 
+
+                // Atualiza as shurikens e remove o guarda atingido.
+                Iterator<ShurikenJogador> iteradorShurikens =
+                        shurikensLancadas.iterator();
+
+                while (iteradorShurikens.hasNext()) {
+                    ShurikenJogador shuriken = iteradorShurikens.next();
+                    shuriken.atualizar(tempoDecorrido);
+                    boolean atingiuGuarda = false;
+
+                    Iterator<GuardaPatrulha> iteradorGuardas =
+                            guardas.iterator();
+
+                    while (iteradorGuardas.hasNext()) {
+                        GuardaPatrulha guarda = iteradorGuardas.next();
+
+                        if (shuriken.atingiu(guarda)) {
+                            mundo.getChildren().remove(guarda);
+                            iteradorGuardas.remove();
+                            atingiuGuarda = true;
+                            avisoColeta.setText("Guarda nocauteado!");
+                            tempoMensagemColeta[0] = 2.5;
+                            break;
+                        }
+                    }
+
+                    if (atingiuGuarda
+                            || shuriken.deveSerRemovida(carregadorMapa)) {
+                        mundo.getChildren().remove(shuriken);
+                        iteradorShurikens.remove();
+                    }
+                }
+
                 // Direção horizontal do jogador.
                 double direcaoX = 0;
 
@@ -746,6 +811,11 @@ public class Main extends Application {
 
                     direcaoX /= ajusteDiagonal;
                     direcaoY /= ajusteDiagonal;
+                }
+
+                if (direcaoX != 0 || direcaoY != 0) {
+                    ultimaDirecaoJogador[0] =
+                            new Point2D(direcaoX, direcaoY).normalize();
                 }
 
                 /*
