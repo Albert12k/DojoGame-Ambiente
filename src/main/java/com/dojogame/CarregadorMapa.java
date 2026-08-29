@@ -45,6 +45,9 @@ public class CarregadorMapa {
     private final Map<String, List<Point2D>> rotasGuardas =
             new LinkedHashMap<>();
 
+    // Baús e outros objetos posicionados na camada ItensInterativos.
+    private final List<ObjetoInterativo> itensInterativos = new ArrayList<>();
+
     /**
      * Procura um mapa dentro da pasta de recursos "maps".
      *
@@ -84,8 +87,10 @@ public class CarregadorMapa {
 
         // Lê os pontos especiais antes de criar os elementos do jogo.
         carregarPontosImportantes(mapa);
+        carregarItensInterativos(mapa);
 
         // Lê também os caminhos que serão percorridos pelos guardas.
+        // Mapas sem guardas, como o armazém, podem omitir essa camada.
         carregarRotasGuardas(mapa);
 
         // Inicialmente nenhuma posição do mapa possui colisão.
@@ -99,8 +104,8 @@ public class CarregadorMapa {
         Canvas canvasMapa = new Canvas(larguraEmPixels, alturaEmPixels);
         GraphicsContext pincel = canvasMapa.getGraphicsContext2D();
 
-        // Carrega a imagem e as informações do tileset externo (.tsx).
-        DadosTileset tileset = carregarTileset(enderecoMapa, mapa);
+        // Carrega as imagens e informações de todos os tilesets externos.
+        List<DadosTileset> tilesets = carregarTilesets(enderecoMapa, mapa);
 
         /*
          * Procura somente camadas de tiles. Camadas de objetos,
@@ -123,7 +128,7 @@ public class CarregadorMapa {
             desenharCamada(
                     pincel,
                     camada,
-                    tileset,
+                    tilesets,
                     larguraTileMapa,
                     alturaTileMapa,
                     camadaTemColisao
@@ -207,6 +212,62 @@ public class CarregadorMapa {
         return ponto;
     }
 
+
+    /**
+     * Lê os retângulos criados na camada ItensInterativos.
+     */
+    private void carregarItensInterativos(Element mapa) {
+        itensInterativos.clear();
+        NodeList gruposDeObjetos = mapa.getElementsByTagName("objectgroup");
+
+        for (int indiceGrupo = 0;
+             indiceGrupo < gruposDeObjetos.getLength();
+             indiceGrupo++) {
+            Element grupo = (Element) gruposDeObjetos.item(indiceGrupo);
+
+            if (!"ItensInterativos".equalsIgnoreCase(
+                    grupo.getAttribute("name")
+            )) {
+                continue;
+            }
+
+            NodeList objetos = grupo.getElementsByTagName("object");
+
+            for (int indiceObjeto = 0;
+                 indiceObjeto < objetos.getLength();
+                 indiceObjeto++) {
+                Element objeto = (Element) objetos.item(indiceObjeto);
+                String nome = objeto.getAttribute("name");
+
+                if (nome.isBlank()) {
+                    continue;
+                }
+
+                itensInterativos.add(new ObjetoInterativo(
+                        nome,
+                        Double.parseDouble(objeto.getAttribute("x")),
+                        Double.parseDouble(objeto.getAttribute("y")),
+                        lerDoubleOpcional(objeto, "width"),
+                        lerDoubleOpcional(objeto, "height")
+                ));
+            }
+
+            return;
+        }
+    }
+
+    /**
+     * Retorna os objetos interativos encontrados no mapa atual.
+     */
+    public List<ObjetoInterativo> obterItensInterativos() {
+        return List.copyOf(itensInterativos);
+    }
+
+    private double lerDoubleOpcional(Element elemento, String atributo) {
+        String valor = elemento.getAttribute(atributo);
+        return valor.isBlank() ? 0.0 : Double.parseDouble(valor);
+    }
+
     /**
      * Lê as polylines da camada RotasGuardas.
      *
@@ -276,9 +337,7 @@ public class CarregadorMapa {
             return;
         }
 
-        throw new IllegalStateException(
-                "A camada RotasGuardas não foi encontrada no mapa."
-        );
+        // A ausência dessa camada significa apenas que o mapa não tem guardas.
     }
 
     /**
@@ -554,60 +613,101 @@ public class CarregadorMapa {
      * Carrega o arquivo TSX indicado pelo mapa e a imagem PNG
      * que contém todos os tiles.
      */
-    private DadosTileset carregarTileset(URL enderecoMapa, Element mapa) {
+    private List<DadosTileset> carregarTilesets(
+            URL enderecoMapa,
+            Element mapa
+    ) {
         NodeList elementosTileset = mapa.getElementsByTagName("tileset");
 
         if (elementosTileset.getLength() == 0) {
             throw new IllegalStateException("O mapa não possui um tileset.");
         }
 
-        Element referenciaTileset = (Element) elementosTileset.item(0);
+        List<DadosTileset> tilesets = new ArrayList<>();
 
-        // Primeiro identificador utilizado por esse tileset dentro do mapa.
-        int primeiroGid = lerInteiro(referenciaTileset, "firstgid");
+        for (int indice = 0; indice < elementosTileset.getLength(); indice++) {
+            Element referenciaTileset =
+                    (Element) elementosTileset.item(indice);
+            int primeiroGid = lerInteiro(referenciaTileset, "firstgid");
+            String caminhoTileset =
+                    referenciaTileset.getAttribute("source");
 
-        // Caminho relativo do arquivo Exterior.tsx.
-        String caminhoTileset = referenciaTileset.getAttribute("source");
-        URL enderecoTileset = resolverEndereco(enderecoMapa, caminhoTileset);
+            if (caminhoTileset.isBlank()) {
+                throw new IllegalStateException(
+                        "Tilesets incorporados ao TMX ainda não são suportados."
+                );
+            }
 
-        // Abre o XML do tileset externo.
-        Document documentoTileset = lerDocumentoXml(enderecoTileset);
-        Element tileset = documentoTileset.getDocumentElement();
+            URL enderecoTileset =
+                    resolverEndereco(enderecoMapa, caminhoTileset);
+            Document documentoTileset = lerDocumentoXml(enderecoTileset);
+            Element tileset = documentoTileset.getDocumentElement();
 
-        int larguraTile = lerInteiro(tileset, "tilewidth");
-        int alturaTile = lerInteiro(tileset, "tileheight");
-        int quantidadeColunas = lerInteiro(tileset, "columns");
+            int larguraTile = lerInteiro(tileset, "tilewidth");
+            int alturaTile = lerInteiro(tileset, "tileheight");
+            int quantidadeColunas = lerInteiro(tileset, "columns");
 
-        NodeList elementosImagem = tileset.getElementsByTagName("image");
+            if (quantidadeColunas <= 0) {
+                throw new IllegalStateException(
+                        "O tileset não possui uma grade de imagem: "
+                                + caminhoTileset
+                );
+            }
 
-        if (elementosImagem.getLength() == 0) {
-            throw new IllegalStateException("O tileset não possui uma imagem.");
-        }
+            NodeList elementosImagem =
+                    tileset.getElementsByTagName("image");
 
-        Element elementoImagem = (Element) elementosImagem.item(0);
+            if (elementosImagem.getLength() == 0) {
+                throw new IllegalStateException(
+                        "O tileset não possui uma imagem: " + caminhoTileset
+                );
+            }
 
-        // Resolve o caminho do PNG a partir da localização do arquivo TSX.
-        String caminhoImagem = elementoImagem.getAttribute("source");
-        URL enderecoImagem = resolverEndereco(enderecoTileset, caminhoImagem);
-
-        // Carrega a imagem completa do tileset para o JavaFX.
-        Image imagem = new Image(enderecoImagem.toExternalForm(), false);
-
-        if (imagem.isError()) {
-            throw new IllegalStateException(
-                    "Não foi possível carregar a imagem do tileset: "
-                            + enderecoImagem,
-                    imagem.getException()
+            Element elementoImagem = (Element) elementosImagem.item(0);
+            URL enderecoImagem = resolverEndereco(
+                    enderecoTileset,
+                    elementoImagem.getAttribute("source")
             );
+            Image imagem = new Image(enderecoImagem.toExternalForm(), false);
+
+            if (imagem.isError()) {
+                throw new IllegalStateException(
+                        "Não foi possível carregar a imagem do tileset: "
+                                + enderecoImagem,
+                        imagem.getException()
+                );
+            }
+
+            tilesets.add(new DadosTileset(
+                    imagem,
+                    primeiroGid,
+                    quantidadeColunas,
+                    larguraTile,
+                    alturaTile
+            ));
         }
 
-        return new DadosTileset(
-                imagem,
-                primeiroGid,
-                quantidadeColunas,
-                larguraTile,
-                alturaTile
-        );
+        return List.copyOf(tilesets);
+    }
+
+    /**
+     * Localiza o tileset responsável por um GID do mapa.
+     */
+    private DadosTileset encontrarTileset(
+            List<DadosTileset> tilesets,
+            int gid
+    ) {
+        DadosTileset encontrado = null;
+
+        for (DadosTileset candidato : tilesets) {
+            if (gid >= candidato.primeiroGid
+                    && (encontrado == null
+                    || candidato.primeiroGid > encontrado.primeiroGid)) {
+                encontrado = candidato;
+            }
+        }
+
+        return encontrado;
     }
 
     /**
@@ -616,7 +716,7 @@ public class CarregadorMapa {
     private void desenharCamada(
             GraphicsContext pincel,
             Element camada,
-            DadosTileset tileset,
+            List<DadosTileset> tilesets,
             int larguraTileMapa,
             int alturaTileMapa,
             boolean camadaTemColisao
@@ -672,6 +772,14 @@ public class CarregadorMapa {
              */
             if (camadaTemColisao && tileBloqueiaMovimento(camada, gid)) {
                 blocosComColisao[linhaMapa][colunaMapa] = true;
+            }
+
+            DadosTileset tileset = encontrarTileset(tilesets, gid);
+
+            if (tileset == null) {
+                throw new IllegalStateException(
+                        "Nenhum tileset foi encontrado para o GID " + gid
+                );
             }
 
             // Converte o GID do mapa para o índice interno do tileset.
@@ -859,6 +967,24 @@ public class CarregadorMapa {
             throw new IllegalStateException(
                     "Não foi possível resolver o caminho: " + caminhoRelativo,
                     erro
+            );
+        }
+    }
+
+    /**
+     * Objeto retangular criado na camada ItensInterativos do Tiled.
+     */
+    public record ObjetoInterativo(
+            String nome,
+            double x,
+            double y,
+            double largura,
+            double altura
+    ) {
+        public Point2D centro() {
+            return new Point2D(
+                    x + largura / 2.0,
+                    y + altura / 2.0
             );
         }
     }
