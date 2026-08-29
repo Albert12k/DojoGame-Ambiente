@@ -326,10 +326,13 @@ public class GuardaPatrulha extends Pane {
         tempoAteDisparo -= tempoDecorrido;
         Point2D centroJogador = centroDoJogador(jogador);
 
+        /*
+         * Linha reta não é suficiente: o jogador precisa estar dentro do
+         * mesmo cone usado pela detecção e exibido na tela. Isso impede que
+         * o guarda mire por um campo de visão antigo ou lateral.
+         */
         if (obterPosicao().distance(centroJogador) > 430.0
-                || !carregadorMapa.possuiLinhaDeVisao(
-                        obterPosicao(), centroJogador
-                )) {
+                || !consegueVer(jogador, carregadorMapa)) {
             return false;
         }
 
