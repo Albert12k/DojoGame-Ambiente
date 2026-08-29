@@ -67,7 +67,8 @@ public class Main extends Application {
                 janela,
                 "entrada_labirinto.tmx",
                 "saida_escadaria",
-                false
+                false,
+                100
         );
     }
 
@@ -78,7 +79,8 @@ public class Main extends Application {
             Stage janela,
             String nomeMapa,
             String nomePontoSaida,
-            boolean armazem
+            boolean armazem,
+            int vidaInicial
     ) {
 
         // Cria o objeto responsável por interpretar arquivos do Tiled.
@@ -144,7 +146,7 @@ public class Main extends Application {
         boolean[] alertaAtivo = {false};
         boolean[] jogadorDerrotado = {false};
         boolean[] faseConcluida = {false};
-        int[] vidaJogador = {100};
+        int[] vidaJogador = {vidaInicial};
         int[] shurikens = {0};
         int[] bombasFumaca = {0};
         int[] kitsMedicos = {0};
@@ -256,7 +258,8 @@ public class Main extends Application {
         avisoAlerta.setVisible(false);
         avisoAlerta.setMouseTransparent(true);
 
-        Label indicadorVida = new Label("Vida: 100");
+        Label indicadorVida =
+                new Label("Vida: " + vidaJogador[0]);
         indicadorVida.setStyle(
                 "-fx-background-color: rgba(15, 18, 22, 0.90);"
                         + "-fx-text-fill: white;"
@@ -434,7 +437,8 @@ public class Main extends Application {
                             janela,
                             nomeMapa,
                             nomePontoSaida,
-                            armazem
+                            armazem,
+                            100
                     );
                     return;
                 }
@@ -874,7 +878,8 @@ public class Main extends Application {
                                 janela,
                                 "armazem_dojo.tmx",
                                 "saida_armazem",
-                                true
+                                true,
+                                vidaJogador[0]
                         );
                         return;
                     }
