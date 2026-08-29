@@ -117,7 +117,7 @@
 </data>
  </layer>
  <objectgroup id="6" name="PontosImportantes">
-  <object id="1" name="spawn_jogador" x="378.667" y="504">
+  <object id="1" name="spawn_jogador" x="384" y="448">
    <point/>
   </object>
   <object id="4" name="saida_armazem" x="384" y="1.33333">
