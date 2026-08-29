@@ -16,8 +16,13 @@ import java.util.List;
 /** Guarda provisório com patrulha, visão e perseguição. */
 public class GuardaPatrulha extends Pane {
 
-    private static final double VELOCIDADE_PATRULHA = 70.0;
-    private static final double VELOCIDADE_PERSEGUICAO = 135.0;
+    // Fora do alerta, os guardas deixam mais espaço para infiltração.
+    private static final double VELOCIDADE_PATRULHA = 48.0;
+    private static final double VELOCIDADE_BUSCA = 72.0;
+    private static final double VELOCIDADE_RETORNO = 55.0;
+
+    // Ao enxergar o jogador, eles continuam perigosos sem serem instantâneos.
+    private static final double VELOCIDADE_PERSEGUICAO = 125.0;
     private static final double ALCANCE_VISAO = 190.0;
     private static final double METADE_ANGULO_VISAO = 32.0;
     private static final int QUANTIDADE_RAIOS_VISAO = 32;
@@ -124,12 +129,18 @@ public class GuardaPatrulha extends Pane {
         indicePerseguicao = Math.min(1, caminhoPerseguicao.size());
     }
 
-    public void atualizarPerseguicao(double tempoDecorrido) {
+    public void atualizarPerseguicao(
+            double tempoDecorrido,
+            boolean jogadorVisivel
+    ) {
         if (!emAlerta) {
             return;
         }
 
-        atualizarCaminhoAtual(tempoDecorrido, VELOCIDADE_PERSEGUICAO);
+        double velocidade = jogadorVisivel
+                ? VELOCIDADE_PERSEGUICAO
+                : VELOCIDADE_BUSCA;
+        atualizarCaminhoAtual(tempoDecorrido, velocidade);
     }
 
     /**
@@ -156,7 +167,7 @@ public class GuardaPatrulha extends Pane {
 
         boolean terminou = atualizarCaminhoAtual(
                 tempoDecorrido,
-                VELOCIDADE_PERSEGUICAO
+                VELOCIDADE_RETORNO
         );
 
         if (terminou) {
