@@ -535,7 +535,10 @@ public class Main extends Application {
                         }
 
                         for (GuardaPatrulha guarda : guardas) {
-                            guarda.atualizarPerseguicao(tempoDecorrido);
+                            guarda.atualizarPerseguicao(
+                                    tempoDecorrido,
+                                    jogadorVisivelAgora
+                            );
 
                             if (!jogadorDerrotado[0]
                                     && guarda.podeDisparar(
