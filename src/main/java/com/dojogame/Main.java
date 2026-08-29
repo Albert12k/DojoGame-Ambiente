@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Classe principal do jogo.
@@ -61,6 +62,23 @@ public class Main extends Application {
      */
     @Override
     public void start(Stage janela) {
+        iniciarFase(
+                janela,
+                "entrada_labirinto.tmx",
+                "saida_escadaria",
+                false
+        );
+    }
+
+    /**
+     * Monta uma fase completa usando o mapa e a saída informados.
+     */
+    private void iniciarFase(
+            Stage janela,
+            String nomeMapa,
+            String nomePontoSaida,
+            boolean armazem
+    ) {
 
         // Cria o objeto responsável por interpretar arquivos do Tiled.
         CarregadorMapa carregadorMapa = new CarregadorMapa();
@@ -70,14 +88,14 @@ public class Main extends Application {
          * e as desenha em um Canvas do JavaFX.
          */
         Canvas visualMapa =
-                carregadorMapa.carregarVisualMapa("entrada_labirinto.tmx");
+                carregadorMapa.carregarVisualMapa(nomeMapa);
 
         /*
          * Também busca a posição da saída criada no Tiled.
          * Esse ponto será utilizado para detectar a chegada do jogador.
          */
         Point2D pontoSaida =
-                carregadorMapa.obterPontoImportante("saida_escadaria");
+                carregadorMapa.obterPontoImportante(nomePontoSaida);
 
         /*
          * Painel que representa o mundo completo do jogo.
@@ -113,11 +131,24 @@ public class Main extends Application {
         // Disparos existentes no mundo durante o estado de alerta.
         List<Projetil> projeteis = new ArrayList<>();
 
+        // Baús desenhados como retângulos na camada ItensInterativos.
+        List<CarregadorMapa.ObjetoInterativo> baus =
+                carregadorMapa.obterItensInterativos().stream()
+                        .filter(item -> item.nome().toLowerCase()
+                                .startsWith("bau_"))
+                        .toList();
+        Set<String> bausAbertos = new HashSet<>();
+
         // Arrays permitem alterar esses valores dentro do AnimationTimer.
         boolean[] alertaAtivo = {false};
         boolean[] jogadorDerrotado = {false};
         boolean[] faseConcluida = {false};
         int[] vidaJogador = {100};
+        int[] shurikens = {0};
+        int[] bombasFumaca = {0};
+        int[] kitsMedicos = {0};
+        boolean[] teclaEConsumida = {false};
+        double[] tempoMensagemColeta = {0};
         double[] tempoSemVerJogador = {0};
         Point2D[] ultimaPosicaoVista = {new Point2D(0, 0)};
 
@@ -181,7 +212,9 @@ public class Main extends Application {
          * parado na tela mesmo enquanto a câmera se movimenta.
          */
         Label avisoSaida = new Label(
-                "Escadaria encontrada — pressione E para entrar"
+                armazem
+                        ? "Saída encontrada — pressione E para continuar"
+                        : "Escadaria encontrada — pressione E para entrar"
         );
 
         // Define uma aparência provisória de interface para o aviso.
@@ -230,6 +263,49 @@ public class Main extends Application {
         indicadorVida.setLayoutY(20);
         indicadorVida.setMouseTransparent(true);
 
+
+        Label avisoBau = new Label("Pressione E para abrir o baú");
+        avisoBau.setStyle(
+                "-fx-background-color: rgba(92, 61, 16, 0.94);"
+                        + "-fx-text-fill: #ffe4a3;"
+                        + "-fx-font-size: 18px;"
+                        + "-fx-font-weight: bold;"
+                        + "-fx-padding: 10px 16px;"
+                        + "-fx-background-radius: 8px;"
+        );
+        avisoBau.setLayoutX(20);
+        avisoBau.setLayoutY(132);
+        avisoBau.setVisible(false);
+        avisoBau.setMouseTransparent(true);
+
+        Label indicadorInventario =
+                new Label("Shurikens: 0  |  Fumaça: 0  |  Kits: 0");
+        indicadorInventario.setStyle(
+                "-fx-background-color: rgba(15, 18, 22, 0.90);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 15px;"
+                        + "-fx-padding: 9px 13px;"
+                        + "-fx-background-radius: 8px;"
+        );
+        indicadorInventario.setLayoutX(LARGURA_JANELA - 350);
+        indicadorInventario.setLayoutY(76);
+        indicadorInventario.setVisible(armazem);
+        indicadorInventario.setMouseTransparent(true);
+
+        Label avisoColeta = new Label();
+        avisoColeta.setStyle(
+                "-fx-background-color: rgba(20, 82, 48, 0.94);"
+                        + "-fx-text-fill: white;"
+                        + "-fx-font-size: 18px;"
+                        + "-fx-font-weight: bold;"
+                        + "-fx-padding: 10px 16px;"
+                        + "-fx-background-radius: 8px;"
+        );
+        avisoColeta.setLayoutX(20);
+        avisoColeta.setLayoutY(188);
+        avisoColeta.setVisible(false);
+        avisoColeta.setMouseTransparent(true);
+
         /*
          * Painel central usado tanto ao concluir o labirinto quanto ao perder.
          * Ele fica fora do mundo para não se mover junto com a câmera.
@@ -256,6 +332,9 @@ public class Main extends Application {
         areaVisivel.getChildren().addAll(
                 avisoAlerta,
                 indicadorVida,
+                indicadorInventario,
+                avisoBau,
+                avisoColeta,
                 painelResultado
         );
 
@@ -330,8 +409,28 @@ public class Main extends Application {
                         && teclasPressionadas.contains(KeyCode.R)) {
                     stop();
                     teclasPressionadas.clear();
-                    Main.this.start(janela);
+                    iniciarFase(
+                            janela,
+                            nomeMapa,
+                            nomePontoSaida,
+                            armazem
+                    );
                     return;
+                }
+
+                // Controla o tempo da mensagem exibida depois de abrir um baú.
+                if (tempoMensagemColeta[0] > 0) {
+                    tempoMensagemColeta[0] -= tempoDecorrido;
+                    avisoColeta.setVisible(true);
+                } else {
+                    avisoColeta.setVisible(false);
+                }
+
+                boolean teclaEPressionada =
+                        teclasPressionadas.contains(KeyCode.E);
+
+                if (!teclaEPressionada) {
+                    teclaEConsumida[0] = false;
                 }
 
                 // Congela guardas, disparos e jogador enquanto o resultado aparece.
@@ -602,9 +701,52 @@ public class Main extends Application {
                  */
                 atualizarCamera(mundo, jogador, cena, visualMapa);
 
+
+                CarregadorMapa.ObjetoInterativo bauProximo =
+                        encontrarBauProximo(jogador, baus, bausAbertos);
+                avisoBau.setVisible(bauProximo != null);
+
+                if (bauProximo != null
+                        && teclaEPressionada
+                        && !teclaEConsumida[0]) {
+                    teclaEConsumida[0] = true;
+                    bausAbertos.add(bauProximo.nome());
+
+                    int sorteio = ThreadLocalRandom.current().nextInt(100);
+                    String mensagemColeta;
+
+                    if (sorteio < 50) {
+                        int quantidade =
+                                ThreadLocalRandom.current().nextInt(3, 8);
+                        shurikens[0] += quantidade;
+                        mensagemColeta =
+                                "Baú aberto: +" + quantidade + " shurikens";
+                    } else if (sorteio < 80) {
+                        int quantidade =
+                                ThreadLocalRandom.current().nextInt(1, 3);
+                        bombasFumaca[0] += quantidade;
+                        mensagemColeta =
+                                "Baú aberto: +" + quantidade
+                                        + " bomba(s) de fumaça";
+                    } else {
+                        kitsMedicos[0]++;
+                        mensagemColeta =
+                                "Baú aberto: +1 kit médico";
+                    }
+
+                    indicadorInventario.setText(
+                            "Shurikens: " + shurikens[0]
+                                    + "  |  Fumaça: " + bombasFumaca[0]
+                                    + "  |  Kits: " + kitsMedicos[0]
+                    );
+                    avisoColeta.setText(mensagemColeta);
+                    tempoMensagemColeta[0] = 2.5;
+                    avisoBau.setVisible(false);
+                }
+
                 /*
                  * Verifica continuamente se o jogador chegou perto
-                 * do ponto saida_escadaria definido no Tiled.
+                 * do ponto de saída definido no Tiled.
                  */
                 boolean jogadorNaSaida = atualizarAvisoSaida(
                         jogador,
@@ -613,14 +755,32 @@ public class Main extends Application {
                 );
 
                 if (jogadorNaSaida
-                        && teclasPressionadas.contains(KeyCode.E)) {
-                    faseConcluida[0] = true;
+                        && bauProximo == null
+                        && teclaEPressionada
+                        && !teclaEConsumida[0]) {
+                    teclaEConsumida[0] = true;
                     avisoSaida.setVisible(false);
                     avisoAlerta.setVisible(false);
+                    avisoBau.setVisible(false);
+
+                    if (!armazem) {
+                        stop();
+                        teclasPressionadas.clear();
+                        iniciarFase(
+                                janela,
+                                "armazem_dojo.tmx",
+                                "saida_armazem",
+                                true
+                        );
+                        return;
+                    }
+
+                    faseConcluida[0] = true;
                     painelResultado.setText(
-                            "Labirinto concluído!\n"
-                                    + "Próxima área: escadaria do dojo\n\n"
-                                    + "Pressione R para jogar novamente"
+                            "Armazém concluído!\n\n"
+                                    + "Todos os itens coletados ficam "
+                                    + "no inventário.\n"
+                                    + "Pressione R para explorar novamente"
                     );
                     painelResultado.setVisible(true);
                     teclasPressionadas.clear();
@@ -645,6 +805,35 @@ public class Main extends Application {
 
         // Confere também a saída antes do primeiro quadro do jogo.
         atualizarAvisoSaida(jogador, pontoSaida, avisoSaida);
+    }
+
+
+    /**
+     * Encontra o baú fechado mais próximo do jogador.
+     */
+    private CarregadorMapa.ObjetoInterativo encontrarBauProximo(
+            Rectangle jogador,
+            List<CarregadorMapa.ObjetoInterativo> baus,
+            Set<String> bausAbertos
+    ) {
+        Point2D centroJogador = centroDoJogador(jogador);
+        CarregadorMapa.ObjetoInterativo maisProximo = null;
+        double menorDistancia = Double.MAX_VALUE;
+
+        for (CarregadorMapa.ObjetoInterativo bau : baus) {
+            if (bausAbertos.contains(bau.nome())) {
+                continue;
+            }
+
+            double distancia = centroJogador.distance(bau.centro());
+
+            if (distancia <= 56.0 && distancia < menorDistancia) {
+                menorDistancia = distancia;
+                maisProximo = bau;
+            }
+        }
+
+        return maisProximo;
     }
 
     private Point2D centroDoJogador(Rectangle jogador) {
