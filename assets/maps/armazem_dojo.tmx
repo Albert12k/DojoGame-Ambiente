@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="24" height="16" tilewidth="32" tileheight="32" infinite="0" nextlayerid="8" nextobjectid="17">
  <tileset firstgid="1" source="../tilesets/armazem/Tileset_Interior Wood_Gnomenlied.tsx"/>
  <tileset firstgid="256" source="../tilesets/armazem/Scene Overview.tsx"/>
@@ -7,7 +7,7 @@
  <tileset firstgid="1695" source="../tilesets/armazem/dungeonex.tsx"/>
  <tileset firstgid="1795" source="../tilesets/armazem/Attacked_Manequin1_with_shadow.tsx"/>
  <tileset firstgid="1811" source="../tilesets/armazem/chests_32x32.tsx"/>
- <layer id="1" name="chÃ£o" width="24" height="16">
+ <layer id="1" name="chao" width="24" height="16">
   <data encoding="csv">
 1646,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1647,1648,
 1652,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1653,1654,
@@ -29,7 +29,7 @@
  </layer>
  <layer id="2" name="caixas" width="24" height="16">
   <properties>
-   <property name="colisÃ£o" type="bool" value="true"/>
+   <property name="colisao" type="bool" value="true"/>
   </properties>
   <data encoding="csv">
 1679,1679,1680,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1685,1694,1694,1694,
@@ -72,7 +72,7 @@
  </layer>
  <layer id="4" name="baus e bancos" width="24" height="16">
   <properties>
-   <property name="colisÃ£o" type="bool" value="true"/>
+   <property name="colisao" type="bool" value="true"/>
   </properties>
   <data encoding="csv">
 0,0,0,1800,1806,0,0,0,0,0,0,0,0,0,0,0,0,0,1801,0,0,0,0,0,
@@ -95,7 +95,7 @@
  </layer>
  <layer id="5" name="baus" width="24" height="16">
   <properties>
-   <property name="colisÃ£o" type="bool" value="true"/>
+   <property name="colisao" type="bool" value="true"/>
   </properties>
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,1653,1653,0,0,0,0,0,0,0,0,0,0,0,
